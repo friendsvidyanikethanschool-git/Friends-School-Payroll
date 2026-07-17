@@ -93,6 +93,24 @@ Campus Stock, to avoid the branch-deploy file-conflict issue you hit before.
 7. Employees only ever see their own **finalized** payslips — draft runs
    (which might still change) stay hidden from self-service view.
 
+## Bug fixes (no schema change needed — index.html only)
+
+- **Timezone date-shift bug**: several places built a "YYYY-MM-DD" string
+  from a local Date using `.toISOString()`, which converts to UTC first.
+  In India (UTC+5:30) this silently shifted dates back by a day — most
+  visibly in "Find Missing Days" for Attendance Backfill, where the whole
+  requested range could shift by one day (e.g. asking for Jul 1–16 could
+  show Jun 30 and miss Jul 16 entirely). Fixed by adding a `localDateStr()`
+  helper that reads local year/month/day components instead, and using it
+  everywhere a date-only string is derived from a Date object.
+- **Finalized payroll + backfill approval**: approving an attendance
+  backfill request no longer silently does nothing to a payslip that's
+  already been finalized. The Attendance Backfill screen now flags any
+  request whose date falls in an already-finalized month, and approving it
+  shows an explicit warning that you'll need to add a manual arrear/
+  adjustment in a future payroll run — the historical payslip itself is
+  never automatically rewritten.
+
 ## What's included
 
 - Employee master (manual entry + bulk CSV import/export, template provided
