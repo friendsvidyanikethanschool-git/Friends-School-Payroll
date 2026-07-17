@@ -120,6 +120,7 @@
   .cal-cell.cal-absent{background:#fdecea;border-color:#f3c9c6;}
   .cal-cell.cal-holiday{background:#e8eefc;border-color:#c6d4f5;}
   .cal-cell.cal-leave{background:#f3e8fc;border-color:#dcc2f5;}
+  .cal-cell.cal-pending{background:#fff4e5;border-color:#f5c67d;}
   .cal-cell.cal-upcoming{background:#f2f5f9;color:var(--muted);}
   .cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
   .cal-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -254,7 +255,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
    GLOBAL STATE
    ============================================================================ */
 let CURRENT_PROFILE = null;   // { id, full_name, role }
-let SETTINGS = {};            // pf / esi / pt_slabs_ap / pt_march_extra / leave_policy / school_location
+let SETTINGS = {};            // pf / esi / pt_slabs_ap / pt_march_extra / school_location / attendance_rules / leave_entitlements
 let EMPLOYEES_CACHE = [];
 let CURRENT_VIEW = 'dashboard';
 let MY_EMPLOYEE = null;       // employee row linked to the logged-in user (role === 'employee')
@@ -265,6 +266,7 @@ const NAV_STAFF = [
   { view:'dashboard', label:'Dashboard' },
   { view:'employees', label:'Employees' },
   { view:'attendance', label:'Attendance' },
+  { view:'backfill-requests', label:'Attendance Backfill' },
   { view:'leave-requests', label:'Leave Requests' },
   { view:'payroll', label:'Payroll Run' },
   { view:'payslips', label:'Payslips' },
@@ -430,7 +432,7 @@ function switchView(view){
   document.getElementById('view-title').textContent = titles[view] || view;
   const renderers = { dashboard: renderDashboard, employees: renderEmployees, attendance: renderAttendance, payroll: renderPayroll, payslips: renderPayslips, reports: renderReports, settings: renderSettings,
     'my-attendance': renderMarkAttendance, 'my-history': renderMyHistory, 'my-payslips': renderMyPayslips,
-    'leave-requests': renderLeaveRequests, 'my-leave': renderMyLeave };
+    'leave-requests': renderLeaveRequests, 'my-leave': renderMyLeave, 'backfill-requests': renderBackfillRequests };
   const defaultView = (CURRENT_PROFILE && CURRENT_PROFILE.role === 'employee') ? renderMarkAttendance : renderDashboard;
   (renderers[view] || defaultView)();
 
@@ -476,6 +478,9 @@ async function renderDashboard(){
   // Pending leave requests
   const { data: pendingLeave } = await sb.from('leave_requests').select('id').eq('status','pending');
 
+  // Pending attendance backfill requests
+  const { data: pendingBackfill } = await sb.from('daily_attendance').select('id').eq('is_backfill', true).eq('backfill_status', 'pending');
+
   // Missing attendance this week (Mon..today, excluding holidays)
   const dayOfWeek = now.getDay(); // 0=Sun
   const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -491,7 +496,7 @@ async function renderDashboard(){
 
   const missingByEmployee = {};
   activeEmployees.forEach(e=>{
-    weekDates.filter(d => d <= todayStr && !holidaySet.has(d)).forEach(d=>{
+    weekDates.filter(d => d <= todayStr && !holidaySet.has(d) && !isDefaultWeeklyHoliday(d)).forEach(d=>{
       const onLeave = (weekLeaveRows||[]).some(lr => lr.employee_id===e.id && lr.from_date<=d && lr.to_date>=d);
       if(!onLeave && !weekAttSet.has(e.id+'|'+d)){
         missingByEmployee[e.id] = missingByEmployee[e.id] || { emp:e, days:[] };
@@ -506,6 +511,7 @@ async function renderDashboard(){
       <div class="kpi"><div class="label">Active Employees</div><div class="value">${activeCount}</div></div>
       <div class="kpi"><div class="label">Present Today</div><div class="value">${presentToday} / ${activeCount}</div></div>
       <div class="kpi"><div class="label">Pending Leave Requests</div><div class="value">${(pendingLeave||[]).length}</div></div>
+      <div class="kpi"><div class="label">Pending Backfill Requests</div><div class="value">${(pendingBackfill||[]).length}</div></div>
       <div class="kpi"><div class="label">Latest Net Payout</div><div class="value">₹${latestNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
     </div>
 
@@ -788,6 +794,7 @@ function parseCSVLine(line){
 function attendanceDayClass(status){
   if(status.startsWith('Full Day')) return 'cal-full';
   if(status.startsWith('Half Day')) return 'cal-half';
+  if(status.startsWith('Backfill Pending')) return 'cal-pending';
   if(status.startsWith('Absent')) return 'cal-absent';
   if(status.startsWith('Holiday')) return 'cal-holiday';
   if(status.includes('Approved Leave') || status.startsWith('LWP')) return 'cal-leave';
@@ -815,12 +822,28 @@ function buildCalendarHTML(dayDetails, month, year){
       <span><i style="background:#fdecea;"></i> Absent</span>
       <span><i style="background:#e8eefc;"></i> Holiday</span>
       <span><i style="background:#f3e8fc;"></i> Leave</span>
+      <span><i style="background:#fff4e5;"></i> Backfill Pending</span>
       <span><i style="background:#f2f5f9;"></i> Upcoming</span>
     </div>
   `;
 }
 
 function daysInMonth(month, year){ return new Date(year, month, 0).getDate(); }
+
+// Sundays and the 2nd Saturday of every month are holidays by default, even
+// with no row in the `holidays` table. Mirrors is_default_weekly_holiday()
+// in the database.
+function defaultWeeklyHolidayName(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  if(dow === 0) return 'Sunday (Weekly Off)';
+  if(dow === 6){
+    const day = d.getDate();
+    if(day >= 8 && day <= 14) return '2nd Saturday (Weekly Off)';
+  }
+  return null;
+}
+function isDefaultWeeklyHoliday(dateStr){ return !!defaultWeeklyHolidayName(dateStr); }
 
 async function renderAttendance(){
   const content = document.getElementById('view-content');
@@ -922,7 +945,7 @@ async function syncFromSelfAttendance(){
     row.querySelector('.att-total').value = summary.totalDays;
     row.querySelector('.att-paid').value = summary.paidDays;
     row.querySelector('.att-lop').value = summary.lopDays;
-    row.querySelector('.att-remarks').value = `CL used: ${summary.clUsed}`;
+    row.querySelector('.att-remarks').value = `Approved CL (YTD): ${summary.clUsed}/${summary.clAvailable}`;
   }
   toast('Pulled from self-marked attendance — review, then Save Attendance.');
 }
@@ -1422,10 +1445,8 @@ async function renderSettings(){
     </div>
 
     <div class="card">
-      <div class="section-title">Unplanned Absence — Monthly CL Grace</div>
-      <div class="form-row" style="max-width:280px;"><label>Days per month covered automatically when no formal leave was applied (no pay cut)</label><input id="set-cl-per-month" type="number" step="0.5" value="${(SETTINGS.leave_policy && SETTINGS.leave_policy.monthly_cl_grace) ?? 2}"></div>
-      <p class="muted">This only applies to days with no attendance mark AND no approved leave request — a safety net for forgotten punches. Formal leave (below) is tracked separately with its own balances.</p>
-      <button class="btn btn-primary btn-sm" onclick="saveLeavePolicy()">Save</button>
+      <div class="section-title">Unplanned Absences</div>
+      <p class="muted">Casual Leave is never applied automatically. A day with no attendance mark, no approved leave, and no approved backfill is Loss of Pay outright. To avoid a pay cut, the employee must formally apply for CL (or another leave type, below) and have it approved — or, for a missed punch on a past day, submit an Attendance Backfill request for admin approval.</p>
     </div>
 
     <div class="card">
@@ -1543,10 +1564,6 @@ async function saveAttendanceRules(){
   });
 }
 
-async function saveLeavePolicy(){
-  await saveSettingKey('leave_policy', { cl_per_month: parseFloat(document.getElementById('set-cl-per-month').value)||0 });
-}
-
 async function saveSchoolLocation(){
   await saveSettingKey('school_location', {
     enabled: document.getElementById('set-loc-enabled').checked,
@@ -1620,9 +1637,10 @@ async function computeMonthlyFromDaily(employeeId, month, year){
     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
     const holiday = holidayByDate[dateStr];
-    if(holiday){
+    const defaultHolidayName = !holiday ? defaultWeeklyHolidayName(dateStr) : null;
+    if(holiday || defaultHolidayName){
       presentEquivalent += 1;
-      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status: 'Holiday — ' + holiday.name });
+      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status: 'Holiday — ' + (holiday ? holiday.name : defaultHolidayName) });
       continue;
     }
 
@@ -1647,25 +1665,44 @@ async function computeMonthlyFromDaily(employeeId, month, year){
     }
 
     const r = byDate[dateStr];
+
+    // A backfilled (past-day, location-bypassed) mark only counts once
+    // admin/accountant approves it. While pending, or if rejected, the day
+    // is not credited — an unplanned absence still needs a formal leave
+    // application (see below) to avoid a pay cut.
+    if(r && r.is_backfill && r.backfill_status === 'pending'){
+      unplannedAbsentEquivalent += 1;
+      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'Backfill Pending Approval' });
+      continue;
+    }
+    if(r && r.is_backfill && r.backfill_status === 'rejected'){
+      unplannedAbsentEquivalent += 1;
+      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'Absent (Backfill Rejected)' });
+      continue;
+    }
+
     const morning = !!(r && r.morning_marked_at);
     const afternoon = !!(r && r.afternoon_marked_at);
+    const backfilled = !!(r && r.is_backfill && r.backfill_status === 'approved');
     let dayValue = 0, status = 'Absent';
-    if(morning && afternoon){ dayValue = 1; status = 'Full Day'; }
-    else if(morning || afternoon){ dayValue = 0.5; status = 'Half Day'; }
+    if(morning && afternoon){ dayValue = 1; status = backfilled ? 'Full Day (Backfilled)' : 'Full Day'; }
+    else if(morning || afternoon){ dayValue = 0.5; status = backfilled ? 'Half Day (Backfilled)' : 'Half Day'; }
     presentEquivalent += dayValue;
     unplannedAbsentEquivalent += round2(1 - dayValue);
     dayDetails.push({ date: dateStr, morning, afternoon, status });
   }
 
-  // Unplanned absences (no mark, no leave applied) are covered first by the
-  // monthly CL grace allowance; anything beyond that is Loss of Pay
-  const clGrace = (SETTINGS.leave_policy && SETTINGS.leave_policy.monthly_cl_grace) ?? 2;
-  const clUsed = Math.min(unplannedAbsentEquivalent, clGrace);
-  const graceLop = round2(unplannedAbsentEquivalent - clUsed);
-  const lopDays = round2(graceLop + lwpDays);
+  // Unplanned absences (no mark, no approved backfill, no leave applied) are
+  // Loss of Pay outright. Casual Leave is never applied automatically —
+  // an employee must formally apply for CL (like any other leave type) and
+  // have it approved; that's already credited above via leaveByDate.
+  const lopDays = round2(unplannedAbsentEquivalent + lwpDays);
   const paidDays = round2(totalDays - lopDays);
 
-  return { totalDays, presentEquivalent, absentEquivalent: unplannedAbsentEquivalent, clUsed, clAvailable: clGrace, lwpDays, lopDays, paidDays, dayDetails };
+  // CL reporting reflects only formally-applied, approved CL leave (year to date)
+  const clBalance = await getLeaveBalance(employeeId, 'CL', year);
+
+  return { totalDays, presentEquivalent, absentEquivalent: unplannedAbsentEquivalent, clUsed: clBalance.used, clAvailable: clBalance.allocated, lwpDays, lopDays, paidDays, dayDetails };
 }
 
 /* ============================================================================
@@ -1724,7 +1761,83 @@ async function renderMarkAttendance(){
 
       <div id="mark-attendance-status" class="muted" style="margin-top:10px;"></div>
     </div>
+
+    <div class="card">
+      <div class="section-title">Missed a Past Day? Request Backfill</div>
+      <p class="muted">For a genuinely missed punch on a past day only. Location is not required — the request goes to your admin/accountant for approval before it counts toward your attendance.</p>
+      <div class="form-grid">
+        <div class="form-row"><label>Date (past days only)</label><input type="date" id="backfill-date" max="${new Date(Date.now()-86400000).toISOString().slice(0,10)}"></div>
+        <div class="form-row"><label>Reason</label><input id="backfill-reason" placeholder="e.g. Forgot to check in"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="submitBackfillRequest()">Submit Request</button>
+      <div id="my-backfill-history" style="margin-top:14px;"></div>
+    </div>
   `;
+  loadMyBackfillHistory();
+}
+
+async function loadMyBackfillHistory(){
+  const el = document.getElementById('my-backfill-history');
+  if(!el) return;
+  const { data } = await sb.from('daily_attendance')
+    .select('date,backfill_status,backfill_reason')
+    .eq('employee_id', MY_EMPLOYEE.id).eq('is_backfill', true)
+    .order('date', { ascending:false }).limit(10);
+  if(!data || !data.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Reason</th><th>Status</th></tr></thead>
+      <tbody>
+        ${data.map(r=>`
+          <tr>
+            <td>${r.date}</td>
+            <td>${r.backfill_reason || '—'}</td>
+            <td><span class="badge badge-${r.backfill_status==='approved'?'active':r.backfill_status==='rejected'?'terminated':'inactive'}">${r.backfill_status}</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table></div>
+  `;
+}
+
+async function submitBackfillRequest(){
+  const date = document.getElementById('backfill-date').value;
+  const reason = document.getElementById('backfill-reason').value.trim();
+  const todayStr = new Date().toISOString().slice(0,10);
+
+  if(!date){ toast('Choose a date.', true); return; }
+  if(date >= todayStr){ toast('Backfill can only be requested for a past date.', true); return; }
+  if(!reason){ toast('Add a short reason for the missed punch.', true); return; }
+  if(isDefaultWeeklyHoliday(date)){ toast('That date is a default weekly holiday (Sunday/2nd Saturday) — no attendance needed.', true); return; }
+
+  const { data: holidayRow } = await sb.from('holidays').select('id').eq('date', date).maybeSingle();
+  if(holidayRow){ toast('That date is a holiday — no attendance needed.', true); return; }
+
+  const { data: leaveRow } = await sb.from('leave_requests').select('id')
+    .eq('employee_id', MY_EMPLOYEE.id).eq('status','approved')
+    .lte('from_date', date).gte('to_date', date).maybeSingle();
+  if(leaveRow){ toast('You already have approved leave covering that date.', true); return; }
+
+  const { data: existing } = await sb.from('daily_attendance').select('id,morning_marked_at,afternoon_marked_at,backfill_status')
+    .eq('employee_id', MY_EMPLOYEE.id).eq('date', date).maybeSingle();
+  if(existing && existing.backfill_status !== 'rejected' && (existing.morning_marked_at || existing.afternoon_marked_at)){
+    toast('Attendance already exists for that date.', true); return;
+  }
+
+  const nominalTime = new Date(date + 'T12:00:00').toISOString();
+  const { error } = await sb.from('daily_attendance').upsert({
+    employee_id: MY_EMPLOYEE.id,
+    date,
+    morning_marked_at: nominalTime,
+    afternoon_marked_at: nominalTime,
+    morning_lat: null, morning_lng: null, afternoon_lat: null, afternoon_lng: null,
+    is_backfill: true,
+    backfill_status: 'pending',
+    backfill_reason: reason
+  }, { onConflict: 'employee_id,date' });
+  if(error){ toast('Could not submit request: ' + error.message, true); return; }
+  toast('Backfill request submitted for admin approval');
+  document.getElementById('backfill-reason').value = '';
+  loadMyBackfillHistory();
 }
 
 async function markAttendance(session, action){
@@ -1790,7 +1903,7 @@ async function loadMyHistory(){
   document.getElementById('my-history-content').innerHTML = `
     <div class="grid-kpi">
       <div class="kpi"><div class="label">Present (full-day equiv.)</div><div class="value">${summary.presentEquivalent}</div></div>
-      <div class="kpi"><div class="label">CL Used</div><div class="value">${summary.clUsed} / ${summary.clAvailable}</div></div>
+      <div class="kpi"><div class="label">CL Used (This Year)</div><div class="value">${summary.clUsed} / ${summary.clAvailable}</div></div>
       <div class="kpi"><div class="label">Loss of Pay Days</div><div class="value">${summary.lopDays}</div></div>
       <div class="kpi"><div class="label">Paid Days</div><div class="value">${summary.paidDays} / ${summary.totalDays}</div></div>
     </div>
@@ -2048,6 +2161,54 @@ async function decideLeaveRequest(id, status){
 
   toast('Leave request ' + status);
   renderLeaveRequests();
+}
+
+/* ---------- Admin: Attendance Backfill Requests ---------- */
+async function renderBackfillRequests(){
+  const content = document.getElementById('view-content');
+  content.innerHTML = '<p class="muted">Loading…</p>';
+  const { data: requests } = await sb.from('daily_attendance')
+    .select('id, date, backfill_reason, backfill_status, reviewed_at, employees(emp_code, full_name, user_id)')
+    .eq('is_backfill', true).order('date', { ascending:false });
+
+  content.innerHTML = `
+    <div class="card">
+      <div class="section-title">Attendance Backfill Requests</div>
+      <p class="muted">Employees can request a genuinely missed past-day punch be marked, without the usual location check. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Name</th><th>Date</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${(requests||[]).map(r=>`
+            <tr>
+              <td>${r.employees.emp_code}</td>
+              <td>${r.employees.full_name}</td>
+              <td>${r.date}</td>
+              <td>${r.backfill_reason || '—'}</td>
+              <td><span class="badge badge-${r.backfill_status==='approved'?'active':r.backfill_status==='rejected'?'terminated':'inactive'}">${r.backfill_status}</span></td>
+              <td>${r.backfill_status==='pending' && can('admin','accountant') ? `
+                <button class="btn btn-sm" onclick="decideBackfillRequest('${r.id}','approved')">Approve</button>
+                <button class="btn btn-sm btn-danger" onclick="decideBackfillRequest('${r.id}','rejected')">Reject</button>
+              ` : ''}</td>
+            </tr>`).join('') || '<tr><td colspan="6" class="muted">No backfill requests yet.</td></tr>'}
+        </tbody>
+      </table></div>
+    </div>
+  `;
+  window._BACKFILL_REQUESTS_CACHE = requests || [];
+}
+
+async function decideBackfillRequest(id, status){
+  if(!confirm(`${status === 'approved' ? 'Approve' : 'Reject'} this backfill request?`)) return;
+  const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).eq('id', id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+
+  const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
+  if(req && req.employees && req.employees.user_id){
+    notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.`, 'attendance');
+  }
+
+  toast('Backfill request ' + status);
+  renderBackfillRequests();
 }
 
 async function editLeaveBalance(employeeId, leaveType, currentAllocated){
