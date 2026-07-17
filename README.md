@@ -15,6 +15,12 @@ PF, ESI, Andhra Pradesh Professional Tax, payslips, and statutory reports.
    `schema_update_employee_portal.sql` → Run. This adds employee
    self-service logins, twice-daily geo-tagged attendance, and tightens RLS
    so an employee login can never see another staff member's salary data.
+4. **SQL Editor → New Query** → paste `schema_update_leave_management.sql`
+   → Run. Adds the Leave Management module (leave types, balances, requests)
+   and auto-generates Employee Codes as `FVN-EMP-001`, `FVN-EMP-002`, ...
+5. **SQL Editor → New Query** → paste `schema_update_phase1.sql` → Run.
+   Adds Left/Terminated employee status, check-out time + working hours on
+   attendance, and the late-entry cutoff setting.
 4. **Authentication → Providers** → make sure Email is enabled. If you want
    staff to start marking attendance immediately after signing up (no email
    click needed), turn **off** "Confirm email" under Authentication →
@@ -88,13 +94,53 @@ Campus Stock, to avoid the branch-deploy file-conflict issue you hit before.
 ## What's included
 
 - Employee master (manual entry + bulk CSV import/export, template provided
-  in-app)
-- Monthly attendance entry (manual grid + CSV import) driving pro-rated pay
+  in-app) — **Employee Code is now auto-generated** (`FVN-EMP-001`,
+  `FVN-EMP-002`, ...) and read-only after creation
+- Employee status now includes **Left** and **Terminated** (with a Last
+  Working Day field), in addition to Active/Inactive
+- Named salary components — add as many as you like (e.g. "Tuition Salary",
+  "Special Allowance") instead of one lump "other allowances" figure
+- Monthly attendance entry (manual grid + CSV import) driving pro-rated pay,
+  now auto-populated from employee self-marked attendance by default (no
+  longer defaults to full-pay before syncing)
+- Employee self-service: create account via Employee Code, mark morning/
+  afternoon **check-in and check-out** with geo-tagging, see working hours
+  and a late-entry flag
+- **Leave Management module**: employees apply for CL/SL/EL/Maternity/
+  Paternity/Comp-Off/LWP with from-to dates and a reason; admins approve/
+  reject with comments, view/edit balances, and export a Leave Register.
+  Approved leave automatically feeds into the attendance/LOP calculation
 - Payroll run: preview → save as draft → admin finalizes (locks it)
 - Payslip view/print (browser print-to-PDF)
-- PF challan, ESI, and Professional Tax reports, each exportable as CSV
-- Settings page for PF rate/ceiling, ESI rate/ceiling, and AP PT slabs —
-  editable in case the state revises them
+- **Salary Register** report with full PF/ESI/PT/net breakdown and bank
+  details, a **Management report** (department-wise totals), plus the PF
+  challan, ESI, and Professional Tax reports — all exportable as CSV
+- Settings page for PF rate/ceiling, ESI rate/ceiling, AP PT slabs, leave
+  entitlements, the monthly CL grace fallback, and attendance rules
+  (late-entry cutoff)
+- Auto-refresh every 45s on Dashboard, Leave Requests, and Mark Attendance
+  (skipped on editable grids like Attendance/Payroll Run so in-progress
+  edits are never wiped)
+
+## Deferred to a later phase (by request, to avoid shipping shallow features)
+
+- Daily/weekly/monthly **calendar views** of attendance
+- Automatic **Saturday weekly summary** + "missing attendance" alerts
+- **Holiday calendar** (national/state/school) that attendance ignores
+  automatically
+- **Notifications** (leave decisions, payslip ready, birthdays, document
+  expiry)
+- Richer **dashboard widgets** (present-today count, pending leave count,
+  etc. beyond what's there now)
+- **Year-wise salary increment** tracking (% or amount) with history
+- **Multi-level approval chains** (Reporting Manager → Principal →
+  Management for payroll; Employee → Manager → Admin for leave) — current
+  version has single-level approval by any admin/accountant
+- Extra employee profile fields (Aadhaar, UAN, ESI number, photo, DOB,
+  gender, blood group, emergency contact, qualifications, reporting manager)
+- Bonus/incentive/arrears/overtime/loan-recovery/salary-advance payroll
+  components
+- Two-factor authentication, audit log, login history
 
 ## What's intentionally left out (per your call)
 
