@@ -1096,9 +1096,24 @@ async function runPayrollPreview(){
   const { data: attendanceRows } = await sb.from('attendance').select('*').eq('month', month).eq('year', year);
   const attMap = {}; (attendanceRows||[]).forEach(a=>attMap[a.employee_id]=a);
 
+  const { data: pendingArrears } = await sb.from('arrears').select('*').eq('status','pending');
+  const arrearsByEmployee = {};
+  (pendingArrears||[]).forEach(a => {
+    (arrearsByEmployee[a.employee_id] = arrearsByEmployee[a.employee_id] || []).push(a);
+  });
+
   const results = employees.map(e => {
     const att = attMap[e.id] || { total_days: daysInMonth(month,year), paid_days: daysInMonth(month,year), lop_days: 0, month };
     const calc = computePayslip(e, att);
+    const empArrears = arrearsByEmployee[e.id] || [];
+    const arrearsAmount = round2(empArrears.reduce((s,a)=>s+Number(a.amount),0));
+    calc.arrearsAmount = arrearsAmount;
+    calc.arrearsIds = empArrears.map(a=>a.id);
+    calc.arrearsReasons = empArrears.map(a=>a.reason);
+    calc.netPay = round2(calc.netPay + arrearsAmount);
+    calc.breakdown.arrearsAmount = arrearsAmount;
+    calc.breakdown.arrearsReasons = calc.arrearsReasons;
+    calc.breakdown.netPay = calc.netPay;
     return { employee: e, calc };
   });
 
@@ -1109,16 +1124,19 @@ async function runPayrollPreview(){
   const totalPF = results.reduce((s,r)=>s+r.calc.pfEmployee,0);
   const totalESI = results.reduce((s,r)=>s+r.calc.esiEmployee,0);
   const totalPT = results.reduce((s,r)=>s+r.calc.pt,0);
+  const totalArrears = results.reduce((s,r)=>s+r.calc.arrearsAmount,0);
 
   document.getElementById('payroll-preview').innerHTML = `
     <div class="grid-kpi" style="margin-bottom:14px;">
       <div class="kpi"><div class="label">Employees</div><div class="value">${results.length}</div></div>
       <div class="kpi"><div class="label">Gross</div><div class="value">₹${totalGross.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
       <div class="kpi"><div class="label">PF+ESI+PT</div><div class="value">₹${(totalPF+totalESI+totalPT).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+      <div class="kpi"><div class="label">Arrears</div><div class="value">₹${totalArrears.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
       <div class="kpi"><div class="label">Net Payout</div><div class="value">₹${totalNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
     </div>
+    ${totalArrears > 0 ? `<p class="muted">Arrears above come from approved attendance backfills whose original month was already finalized — see the row-level tooltip for the reason.</p>` : ''}
     <div class="table-wrap"><table>
-      <thead><tr><th>Code</th><th>Name</th><th>Earned Gross</th><th>PF</th><th>ESI</th><th>PT</th><th>Net Pay</th></tr></thead>
+      <thead><tr><th>Code</th><th>Name</th><th>Earned Gross</th><th>PF</th><th>ESI</th><th>PT</th><th>Arrears</th><th>Net Pay</th></tr></thead>
       <tbody>
         ${results.map(r=>`
           <tr>
@@ -1128,6 +1146,7 @@ async function runPayrollPreview(){
             <td>₹${r.calc.pfEmployee.toLocaleString('en-IN')}</td>
             <td>₹${r.calc.esiEmployee.toLocaleString('en-IN')}</td>
             <td>₹${r.calc.pt.toLocaleString('en-IN')}</td>
+            <td title="${r.calc.arrearsReasons.join(' | ')}">${r.calc.arrearsAmount ? '₹'+r.calc.arrearsAmount.toLocaleString('en-IN') : '—'}</td>
             <td><strong>₹${r.calc.netPay.toLocaleString('en-IN')}</strong></td>
           </tr>`).join('')}
       </tbody>
@@ -1163,6 +1182,7 @@ async function confirmSavePayrollRun(){
     esi_employer: r.calc.esiEmployer,
     professional_tax: r.calc.pt,
     other_deductions: 0,
+    arrears_amount: r.calc.arrearsAmount,
     net_pay: r.calc.netPay,
     breakdown: r.calc.breakdown
   }));
@@ -1170,7 +1190,12 @@ async function confirmSavePayrollRun(){
   const { error: slipErr } = await sb.from('payslips').upsert(payslipRows, { onConflict: 'payroll_run_id,employee_id' });
   if(slipErr){ toast('Could not save payslips: ' + slipErr.message, true); return; }
 
-  toast(`Payroll run saved as draft (${payslipRows.length} payslips)`);
+  const allArrearIds = results.flatMap(r => r.calc.arrearsIds);
+  if(allArrearIds.length){
+    await sb.from('arrears').update({ status: 'applied', applied_payroll_run_id: run.id }).in('id', allArrearIds);
+  }
+
+  toast(`Payroll run saved as draft (${payslipRows.length} payslips)` + (allArrearIds.length ? `, ${allArrearIds.length} arrear(s) applied` : ''));
   switchView('payslips');
   setTimeout(()=>loadRunIntoPayslips(run.id), 100);
 }
@@ -1266,6 +1291,7 @@ function renderPayslipHTML(monthLabel, empName, empCode, empDesignation, b){
         <tr><td>Other Allowances</td><td style="text-align:right;">₹${Number(b.allowances).toLocaleString('en-IN')}</td></tr>
         <tr><td>Gross (full month)</td><td style="text-align:right;">₹${Number(b.gross).toLocaleString('en-IN')}</td></tr>
         <tr><td><strong>Earned Gross</strong></td><td style="text-align:right;"><strong>₹${Number(b.earnedGross).toLocaleString('en-IN')}</strong></td></tr>
+        ${b.arrearsAmount ? `<tr><td>Arrears${b.arrearsReasons && b.arrearsReasons.length ? ' <span class="muted" style="font-size:11px;">(' + b.arrearsReasons.join('; ') + ')</span>' : ''}</td><td style="text-align:right;">+ ₹${Number(b.arrearsAmount).toLocaleString('en-IN')}</td></tr>` : ''}
         <tr><td colspan="2">&nbsp;</td></tr>
         <tr><td>PF (Employee)</td><td style="text-align:right;">− ₹${Number(b.pfEmployee).toLocaleString('en-IN')}</td></tr>
         <tr><td>ESI (Employee)</td><td style="text-align:right;">− ₹${Number(b.esiEmployee).toLocaleString('en-IN')}</td></tr>
@@ -2240,7 +2266,7 @@ async function renderBackfillRequests(){
   const content = document.getElementById('view-content');
   content.innerHTML = '<p class="muted">Loading…</p>';
   const { data: requests } = await sb.from('daily_attendance')
-    .select('id, date, backfill_reason, backfill_status, reviewed_at, employees(emp_code, full_name, user_id)')
+    .select('id, employee_id, date, backfill_reason, backfill_status, reviewed_at, employees(emp_code, full_name, user_id)')
     .eq('is_backfill', true).order('date', { ascending:false });
 
   const { data: finalizedRuns } = await sb.from('payroll_runs').select('month,year').eq('status','finalized');
@@ -2253,7 +2279,7 @@ async function renderBackfillRequests(){
     <div class="card">
       <div class="section-title">Attendance Backfill Requests</div>
       <p class="muted">Employees can request genuinely missed past-day punches be marked, without the usual location check — often submitted in a batch covering several days. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
-      <p class="muted">⚠ If a request's date falls in a month whose payroll is already <strong>finalized</strong>, approving it updates the attendance record but does <strong>not</strong> automatically revise that payslip — you'll need to add a manual arrear/adjustment in a future payroll run for the difference.</p>
+      <p class="muted">⚠ If a request's date falls in a month whose payroll is already <strong>finalized</strong>, the original payslip itself is never rewritten. Instead, approving it automatically queues an <strong>arrear</strong> (one day's pay, at that month's rate) which gets pulled into the employee's next payroll run.</p>
       ${pendingCount && can('admin','accountant') ? `
         <div class="btn-row" style="margin-bottom:8px;">
           <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(true)">Select All Pending</button>
@@ -2297,7 +2323,31 @@ function finalizedMonthWarning(dateStr, status){
   if(status !== 'approved') return null;
   const [y,m] = dateStr.split('-').map(Number);
   if(!(window._FINALIZED_MONTHS && window._FINALIZED_MONTHS.has(`${y}-${m}`))) return null;
-  return `Heads up: ${MONTH_NAMES[m]} ${y}'s payroll is already finalized. Approving this will update the attendance record, but it will NOT automatically change that payslip — you'll need to add a manual arrear/adjustment for the difference in a future payroll run.\n\nApprove anyway?`;
+  return `Heads up: ${MONTH_NAMES[m]} ${y}'s payroll is already finalized, so that payslip itself won't change. Approving will queue an arrear (one day's pay at that month's rate) to be added to this employee's next payroll run automatically.\n\nApprove anyway?`;
+}
+
+// Looks up the employee's finalized payslip for a given month/year to derive a fair per-day rate
+async function createArrearForBackfill(employeeId, dateStr){
+  const [y, m] = dateStr.split('-').map(Number);
+  const { data: run } = await sb.from('payroll_runs').select('id').eq('month', m).eq('year', y).eq('status','finalized').maybeSingle();
+  if(!run) return null;
+  const { data: slip } = await sb.from('payslips').select('breakdown').eq('payroll_run_id', run.id).eq('employee_id', employeeId).maybeSingle();
+  if(!slip || !slip.breakdown || !slip.breakdown.totalDays) return null;
+
+  const perDiem = round2(Number(slip.breakdown.gross) / Number(slip.breakdown.totalDays));
+  if(!perDiem) return null;
+
+  const { error } = await sb.from('arrears').insert({
+    employee_id: employeeId,
+    amount: perDiem,
+    reason: `Backfilled attendance for ${dateStr} (${MONTH_NAMES[m]} ${y} payroll was already finalized)`,
+    source_month: m,
+    source_year: y,
+    status: 'pending',
+    created_by: CURRENT_PROFILE.id
+  });
+  if(error){ console.error('Arrear creation failed:', error.message); return null; }
+  return perDiem;
 }
 
 async function decideBackfillRequest(id, status){
@@ -2309,11 +2359,16 @@ async function decideBackfillRequest(id, status){
   const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).eq('id', id);
   if(error){ toast('Failed: ' + error.message, true); return; }
 
-  if(req && req.employees && req.employees.user_id){
-    notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.`, 'attendance');
+  let arrearAmount = null;
+  if(status === 'approved' && req){
+    arrearAmount = await createArrearForBackfill(req.employee_id || req.employees?.id, req.date);
   }
 
-  toast('Backfill request ' + status);
+  if(req && req.employees && req.employees.user_id){
+    notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.` + (arrearAmount ? ` An arrear of ₹${arrearAmount.toLocaleString('en-IN')} will be added to your next payslip.` : ''), 'attendance');
+  }
+
+  toast('Backfill request ' + status + (arrearAmount ? ` — ₹${arrearAmount.toLocaleString('en-IN')} arrear queued for next payroll run` : ''));
   renderBackfillRequests();
 }
 
@@ -2328,21 +2383,28 @@ async function decideBackfillRequestsBulk(status){
   });
   const baseMsg = `${status==='approved'?'Approve':'Reject'} ${ids.length} selected request${ids.length>1?'s':''}?`;
   const confirmMsg = anyFinalized
-    ? baseMsg + `\n\nHeads up: one or more of these dates fall in an already-finalized payroll month. Approving updates attendance records but won't automatically revise those payslips — add a manual arrear/adjustment in a future run if needed.`
+    ? baseMsg + `\n\nHeads up: one or more of these dates fall in an already-finalized payroll month. Approving will automatically queue an arrear (per-day pay) to be included in that employee's next payroll run.`
     : baseMsg;
   if(!confirm(confirmMsg)) return;
 
   const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).in('id', ids);
   if(error){ toast('Failed: ' + error.message, true); return; }
 
-  ids.forEach(id=>{
+  let arrearsCreated = 0;
+  for(const id of ids){
     const req = cache.find(r=>r.id===id);
-    if(req && req.employees && req.employees.user_id){
-      notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.`, 'attendance');
+    if(!req) continue;
+    let arrearAmount = null;
+    if(status === 'approved'){
+      arrearAmount = await createArrearForBackfill(req.employee_id || req.employees?.id, req.date);
+      if(arrearAmount) arrearsCreated++;
     }
-  });
+    if(req.employees && req.employees.user_id){
+      notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.` + (arrearAmount ? ` An arrear of ₹${arrearAmount.toLocaleString('en-IN')} will be added to your next payslip.` : ''), 'attendance');
+    }
+  }
 
-  toast(`${ids.length} backfill request${ids.length>1?'s':''} ${status}`);
+  toast(`${ids.length} backfill request${ids.length>1?'s':''} ${status}` + (arrearsCreated ? ` — ${arrearsCreated} arrear(s) queued` : ''));
   renderBackfillRequests();
 }
 
