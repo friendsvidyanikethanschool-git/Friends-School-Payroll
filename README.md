@@ -21,6 +21,8 @@ PF, ESI, Andhra Pradesh Professional Tax, payslips, and statutory reports.
 5. **SQL Editor → New Query** → paste `schema_update_phase1.sql` → Run.
    Adds Left/Terminated employee status, check-out time + working hours on
    attendance, and the late-entry cutoff setting.
+6. **SQL Editor → New Query** → paste `schema_update_phase2.sql` → Run.
+   Adds the Holiday Calendar and in-app notifications.
 4. **Authentication → Providers** → make sure Email is enabled. If you want
    staff to start marking attendance immediately after signing up (no email
    click needed), turn **off** "Confirm email" under Authentication →
@@ -121,17 +123,29 @@ Campus Stock, to avoid the branch-deploy file-conflict issue you hit before.
 - Auto-refresh every 45s on Dashboard, Leave Requests, and Mark Attendance
   (skipped on editable grids like Attendance/Payroll Run so in-progress
   edits are never wiped)
+- **Holiday Calendar** (national/state/school/optional) — holidays never
+  count as absent, anywhere in the app
+- **Attendance calendar views** — employees see a color-coded monthly
+  calendar in My Attendance History; admins can pull up any employee's
+  calendar from the Attendance page
+- **Dashboard**: Present Today, Employees Absent Today, Pending Leave
+  Requests, and a **This Week — Missing Attendance** widget (days with no
+  check-in, no approved leave, no holiday, Monday through today)
+- **In-app notifications** (bell icon, top right) for leave approval/
+  rejection and payslip availability — polls every 60s
+
+## Note on the "Saturday weekly summary"
+
+There's no server-side scheduler here (GitHub Pages is static hosting — no
+cron). Instead, the **Missing Attendance** widget on the Dashboard computes
+live, any day of the week, showing Monday-through-today gaps — so checking
+it on Saturday still gives you the full week's picture. If you want a true
+scheduled job (e.g. an automatic email every Saturday morning), that needs
+a small serverless function (Supabase Edge Functions + `pg_cron`, or a
+GitHub Actions scheduled workflow) — happy to add that as a follow-up.
 
 ## Deferred to a later phase (by request, to avoid shipping shallow features)
 
-- Daily/weekly/monthly **calendar views** of attendance
-- Automatic **Saturday weekly summary** + "missing attendance" alerts
-- **Holiday calendar** (national/state/school) that attendance ignores
-  automatically
-- **Notifications** (leave decisions, payslip ready, birthdays, document
-  expiry)
-- Richer **dashboard widgets** (present-today count, pending leave count,
-  etc. beyond what's there now)
 - **Year-wise salary increment** tracking (% or amount) with history
 - **Multi-level approval chains** (Reporting Manager → Principal →
   Management for payroll; Employee → Manager → Admin for leave) — current
@@ -140,7 +154,11 @@ Campus Stock, to avoid the branch-deploy file-conflict issue you hit before.
   gender, blood group, emergency contact, qualifications, reporting manager)
 - Bonus/incentive/arrears/overtime/loan-recovery/salary-advance payroll
   components
+- Birthday and document-expiry notifications (need the profile fields
+  above first)
 - Two-factor authentication, audit log, login history
+- True scheduled weekly summary (see note above — needs a serverless
+  function, not just app code)
 
 ## What's intentionally left out (per your call)
 
