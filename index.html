@@ -1763,16 +1763,20 @@ async function renderMarkAttendance(){
     </div>
 
     <div class="card">
-      <div class="section-title">Missed a Past Day? Request Backfill</div>
-      <p class="muted">For a genuinely missed punch on a past day only. Location is not required — the request goes to your admin/accountant for approval before it counts toward your attendance.</p>
+      <div class="section-title">Missed Past Days? Request Backfill</div>
+      <p class="muted">Find genuinely missed punches over a date range and request them all at once. Location is not required — each day goes to your admin/accountant for approval before it counts toward your attendance.</p>
       <div class="form-grid">
-        <div class="form-row"><label>Date (past days only)</label><input type="date" id="backfill-date" max="${new Date(Date.now()-86400000).toISOString().slice(0,10)}"></div>
-        <div class="form-row"><label>Reason</label><input id="backfill-reason" placeholder="e.g. Forgot to check in"></div>
+        <div class="form-row"><label>From</label><input type="date" id="backfill-from"></div>
+        <div class="form-row"><label>To</label><input type="date" id="backfill-to" max="${new Date(Date.now()-86400000).toISOString().slice(0,10)}"></div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="submitBackfillRequest()">Submit Request</button>
+      <button class="btn btn-sm" onclick="loadMissingDaysForBackfill()">Find Missing Days</button>
+      <div id="backfill-missing-list" style="margin-top:12px;"></div>
       <div id="my-backfill-history" style="margin-top:14px;"></div>
     </div>
   `;
+  const y = new Date(); y.setDate(y.getDate()-14);
+  document.getElementById('backfill-from').value = y.toISOString().slice(0,10);
+  document.getElementById('backfill-to').value = new Date(Date.now()-86400000).toISOString().slice(0,10);
   loadMyBackfillHistory();
 }
 
@@ -1782,9 +1786,10 @@ async function loadMyBackfillHistory(){
   const { data } = await sb.from('daily_attendance')
     .select('date,backfill_status,backfill_reason')
     .eq('employee_id', MY_EMPLOYEE.id).eq('is_backfill', true)
-    .order('date', { ascending:false }).limit(10);
+    .order('date', { ascending:false }).limit(15);
   if(!data || !data.length){ el.innerHTML = ''; return; }
   el.innerHTML = `
+    <div class="section-title" style="margin-top:0;">Your Recent Backfill Requests</div>
     <div class="table-wrap"><table>
       <thead><tr><th>Date</th><th>Reason</th><th>Status</th></tr></thead>
       <tbody>
@@ -1799,44 +1804,98 @@ async function loadMyBackfillHistory(){
   `;
 }
 
-async function submitBackfillRequest(){
-  const date = document.getElementById('backfill-date').value;
-  const reason = document.getElementById('backfill-reason').value.trim();
-  const todayStr = new Date().toISOString().slice(0,10);
+async function loadMissingDaysForBackfill(){
+  const listEl = document.getElementById('backfill-missing-list');
+  const fromDate = document.getElementById('backfill-from').value;
+  let toDate = document.getElementById('backfill-to').value;
+  const yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
 
-  if(!date){ toast('Choose a date.', true); return; }
-  if(date >= todayStr){ toast('Backfill can only be requested for a past date.', true); return; }
-  if(!reason){ toast('Add a short reason for the missed punch.', true); return; }
-  if(isDefaultWeeklyHoliday(date)){ toast('That date is a default weekly holiday (Sunday/2nd Saturday) — no attendance needed.', true); return; }
+  if(!fromDate || !toDate){ toast('Choose a from and to date.', true); return; }
+  if(toDate > yesterday) toDate = yesterday; // backfill is past-days only
+  if(fromDate > toDate){ toast('From date must be on or before To date (and both in the past).', true); return; }
 
-  const { data: holidayRow } = await sb.from('holidays').select('id').eq('date', date).maybeSingle();
-  if(holidayRow){ toast('That date is a holiday — no attendance needed.', true); return; }
+  listEl.innerHTML = '<p class="muted">Checking…</p>';
 
-  const { data: leaveRow } = await sb.from('leave_requests').select('id')
+  const { data: attRows } = await sb.from('daily_attendance')
+    .select('date,morning_marked_at,afternoon_marked_at,is_backfill,backfill_status')
+    .eq('employee_id', MY_EMPLOYEE.id).gte('date', fromDate).lte('date', toDate);
+  const attByDate = {}; (attRows||[]).forEach(r=>attByDate[r.date]=r);
+
+  const { data: holidayRows } = await sb.from('holidays').select('date').gte('date', fromDate).lte('date', toDate);
+  const holidaySet = new Set((holidayRows||[]).map(h=>h.date));
+
+  const { data: leaveRows } = await sb.from('leave_requests').select('from_date,to_date')
     .eq('employee_id', MY_EMPLOYEE.id).eq('status','approved')
-    .lte('from_date', date).gte('to_date', date).maybeSingle();
-  if(leaveRow){ toast('You already have approved leave covering that date.', true); return; }
+    .lte('from_date', toDate).gte('to_date', fromDate);
 
-  const { data: existing } = await sb.from('daily_attendance').select('id,morning_marked_at,afternoon_marked_at,backfill_status')
-    .eq('employee_id', MY_EMPLOYEE.id).eq('date', date).maybeSingle();
-  if(existing && existing.backfill_status !== 'rejected' && (existing.morning_marked_at || existing.afternoon_marked_at)){
-    toast('Attendance already exists for that date.', true); return;
+  const missing = [];
+  let cur = new Date(fromDate + 'T00:00:00');
+  const end = new Date(toDate + 'T00:00:00');
+  while(cur <= end){
+    const dateStr = cur.toISOString().slice(0,10);
+    cur.setDate(cur.getDate()+1);
+
+    if(holidaySet.has(dateStr) || isDefaultWeeklyHoliday(dateStr)) continue;
+    if((leaveRows||[]).some(lr => lr.from_date<=dateStr && lr.to_date>=dateStr)) continue;
+
+    const r = attByDate[dateStr];
+    if(r){
+      if(r.morning_marked_at || r.afternoon_marked_at) continue; // already has a mark
+      if(r.is_backfill && (r.backfill_status==='pending' || r.backfill_status==='approved')) continue; // already requested
+    }
+    missing.push(dateStr);
   }
 
-  const nominalTime = new Date(date + 'T12:00:00').toISOString();
-  const { error } = await sb.from('daily_attendance').upsert({
-    employee_id: MY_EMPLOYEE.id,
-    date,
-    morning_marked_at: nominalTime,
-    afternoon_marked_at: nominalTime,
-    morning_lat: null, morning_lng: null, afternoon_lat: null, afternoon_lng: null,
-    is_backfill: true,
-    backfill_status: 'pending',
-    backfill_reason: reason
-  }, { onConflict: 'employee_id,date' });
-  if(error){ toast('Could not submit request: ' + error.message, true); return; }
-  toast('Backfill request submitted for admin approval');
-  document.getElementById('backfill-reason').value = '';
+  renderMissingDaysList(missing);
+}
+
+function renderMissingDaysList(missing){
+  const listEl = document.getElementById('backfill-missing-list');
+  if(!missing.length){ listEl.innerHTML = '<p class="muted">No missing days found in that range.</p>'; return; }
+  listEl.innerHTML = `
+    <div class="btn-row" style="margin-bottom:6px;">
+      <button class="btn btn-sm" onclick="toggleAllBackfillChecks(true)">Select All</button>
+      <button class="btn btn-sm" onclick="toggleAllBackfillChecks(false)">Clear</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Date</th></tr></thead>
+      <tbody>
+        ${missing.map(d=>`<tr><td><input type="checkbox" class="backfill-check" value="${d}" checked></td><td>${new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short', day:'2-digit', month:'short', year:'numeric'})}</td></tr>`).join('')}
+      </tbody>
+    </table></div>
+    <div class="form-row" style="margin-top:10px;max-width:400px;"><label>Reason (applies to all selected days)</label><input id="backfill-reason-bulk" placeholder="e.g. Forgot to check in"></div>
+    <button class="btn btn-primary btn-sm" onclick="submitBulkBackfillRequest()">Submit Selected Requests</button>
+  `;
+}
+
+function toggleAllBackfillChecks(checked){
+  document.querySelectorAll('.backfill-check').forEach(cb=>cb.checked=checked);
+}
+
+async function submitBulkBackfillRequest(){
+  const dates = [...document.querySelectorAll('.backfill-check:checked')].map(cb=>cb.value);
+  const reason = document.getElementById('backfill-reason-bulk').value.trim();
+  if(!dates.length){ toast('Select at least one day.', true); return; }
+  if(!reason){ toast('Add a short reason for the missed punches.', true); return; }
+
+  const rows = dates.map(date=>{
+    const nominalTime = new Date(date + 'T12:00:00').toISOString();
+    return {
+      employee_id: MY_EMPLOYEE.id,
+      date,
+      morning_marked_at: nominalTime,
+      afternoon_marked_at: nominalTime,
+      morning_lat: null, morning_lng: null, afternoon_lat: null, afternoon_lng: null,
+      is_backfill: true,
+      backfill_status: 'pending',
+      backfill_reason: reason
+    };
+  });
+
+  const { error } = await sb.from('daily_attendance').upsert(rows, { onConflict: 'employee_id,date' });
+  if(error){ toast('Could not submit requests: ' + error.message, true); return; }
+  toast(`Submitted ${rows.length} backfill request${rows.length>1?'s':''} for admin approval`);
+  document.getElementById('backfill-missing-list').innerHTML = '';
   loadMyBackfillHistory();
 }
 
@@ -2171,15 +2230,26 @@ async function renderBackfillRequests(){
     .select('id, date, backfill_reason, backfill_status, reviewed_at, employees(emp_code, full_name, user_id)')
     .eq('is_backfill', true).order('date', { ascending:false });
 
+  const pendingCount = (requests||[]).filter(r=>r.backfill_status==='pending').length;
+
   content.innerHTML = `
     <div class="card">
       <div class="section-title">Attendance Backfill Requests</div>
-      <p class="muted">Employees can request a genuinely missed past-day punch be marked, without the usual location check. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
+      <p class="muted">Employees can request genuinely missed past-day punches be marked, without the usual location check — often submitted in a batch covering several days. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
+      ${pendingCount && can('admin','accountant') ? `
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(true)">Select All Pending</button>
+          <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(false)">Clear</button>
+          <button class="btn btn-sm btn-primary" onclick="decideBackfillRequestsBulk('approved')">Approve Selected</button>
+          <button class="btn btn-sm btn-danger" onclick="decideBackfillRequestsBulk('rejected')">Reject Selected</button>
+        </div>
+      ` : ''}
       <div class="table-wrap"><table>
-        <thead><tr><th>Code</th><th>Name</th><th>Date</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Code</th><th>Name</th><th>Date</th><th>Reason</th><th>Status</th><th></th></tr></thead>
         <tbody>
           ${(requests||[]).map(r=>`
             <tr>
+              <td>${r.backfill_status==='pending' && can('admin','accountant') ? `<input type="checkbox" class="backfill-req-check" value="${r.id}">` : ''}</td>
               <td>${r.employees.emp_code}</td>
               <td>${r.employees.full_name}</td>
               <td>${r.date}</td>
@@ -2189,12 +2259,16 @@ async function renderBackfillRequests(){
                 <button class="btn btn-sm" onclick="decideBackfillRequest('${r.id}','approved')">Approve</button>
                 <button class="btn btn-sm btn-danger" onclick="decideBackfillRequest('${r.id}','rejected')">Reject</button>
               ` : ''}</td>
-            </tr>`).join('') || '<tr><td colspan="6" class="muted">No backfill requests yet.</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="7" class="muted">No backfill requests yet.</td></tr>'}
         </tbody>
       </table></div>
     </div>
   `;
   window._BACKFILL_REQUESTS_CACHE = requests || [];
+}
+
+function toggleAllBackfillReqChecks(checked){
+  document.querySelectorAll('.backfill-req-check').forEach(cb=>cb.checked=checked);
 }
 
 async function decideBackfillRequest(id, status){
@@ -2208,6 +2282,25 @@ async function decideBackfillRequest(id, status){
   }
 
   toast('Backfill request ' + status);
+  renderBackfillRequests();
+}
+
+async function decideBackfillRequestsBulk(status){
+  const ids = [...document.querySelectorAll('.backfill-req-check:checked')].map(cb=>cb.value);
+  if(!ids.length){ toast('Select at least one request.', true); return; }
+  if(!confirm(`${status==='approved'?'Approve':'Reject'} ${ids.length} selected request${ids.length>1?'s':''}?`)) return;
+
+  const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).in('id', ids);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+
+  ids.forEach(id=>{
+    const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
+    if(req && req.employees && req.employees.user_id){
+      notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.`, 'attendance');
+    }
+  });
+
+  toast(`${ids.length} backfill request${ids.length>1?'s':''} ${status}`);
   renderBackfillRequests();
 }
 
