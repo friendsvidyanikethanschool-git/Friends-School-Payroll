@@ -23,6 +23,12 @@ PF, ESI, Andhra Pradesh Professional Tax, payslips, and statutory reports.
    attendance, and the late-entry cutoff setting.
 6. **SQL Editor → New Query** → paste `schema_update_phase2.sql` → Run.
    Adds the Holiday Calendar and in-app notifications.
+7. **SQL Editor → New Query** → paste `schema_update_phase2b.sql` → Run.
+   Adds attendance backfill requests, default Sunday/2nd-Saturday holidays,
+   and removes the automatic CL grace.
+8. **SQL Editor → New Query** → paste `schema_update_phase2c.sql` → Run.
+   Adds the `arrears` table so backfilled attendance for an already-
+   finalized month automatically flows into the next payroll run.
 4. **Authentication → Providers** → make sure Email is enabled. If you want
    staff to start marking attendance immediately after signing up (no email
    click needed), turn **off** "Confirm email" under Authentication →
@@ -106,10 +112,31 @@ Campus Stock, to avoid the branch-deploy file-conflict issue you hit before.
 - **Finalized payroll + backfill approval**: approving an attendance
   backfill request no longer silently does nothing to a payslip that's
   already been finalized. The Attendance Backfill screen now flags any
-  request whose date falls in an already-finalized month, and approving it
-  shows an explicit warning that you'll need to add a manual arrear/
-  adjustment in a future payroll run — the historical payslip itself is
-  never automatically rewritten.
+  request whose date falls in an already-finalized month — approving it
+  automatically queues an **arrear** that flows into the employee's next
+  payroll run (see below). The historical payslip itself is never
+  automatically rewritten.
+
+## Backfill → Arrears (automatic)
+
+Approving an attendance backfill for a date whose payroll month is already
+**finalized** never rewrites that old payslip. Instead it now automatically:
+
+1. Looks up that employee's finalized payslip for the original month and
+   works out a fair per-day rate (that month's gross ÷ days in month)
+2. Queues an **arrear** for that amount
+3. Pulls it into the employee's **next** payroll run automatically — shown
+   as its own "Arrears" column in the run preview, and its own line on the
+   printed payslip (with the reason, e.g. which date/month it's for)
+4. Marks the arrear as applied once that run is saved, so it's never paid
+   out twice
+
+This is a same-gross-rate approximation — it doesn't re-run PF/ESI/PT for
+the corrected month, just adds the missing day's gross pay to the next
+payslip. That's usually fine for one or two missed days; if you're
+backfilling many days in a finalized month, or the correction pushes PF/ESI
+near a wage-ceiling boundary, it's worth sanity-checking the numbers by
+hand.
 
 ## What's included
 
