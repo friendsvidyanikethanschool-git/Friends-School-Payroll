@@ -109,6 +109,21 @@
   .toast.error{background:var(--danger);}
 
   code{background:#f2f5f9;padding:2px 5px;border-radius:4px;font-size:12px;}
+
+  /* Attendance calendar */
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px;}
+  .cal-dow{font-size:11px;color:var(--muted);text-align:center;font-weight:600;padding-bottom:4px;}
+  .cal-cell{border-radius:7px;padding:6px 4px;font-size:11px;min-height:48px;background:#f8fafc;border:1px solid var(--border);}
+  .cal-cell .cal-day-num{font-weight:700;font-size:12px;}
+  .cal-cell.cal-full{background:#e5f7ee;border-color:#bfe9d3;}
+  .cal-cell.cal-half{background:#fff8e6;border-color:#f3e0a8;}
+  .cal-cell.cal-absent{background:#fdecea;border-color:#f3c9c6;}
+  .cal-cell.cal-holiday{background:#e8eefc;border-color:#c6d4f5;}
+  .cal-cell.cal-leave{background:#f3e8fc;border-color:#dcc2f5;}
+  .cal-cell.cal-upcoming{background:#f2f5f9;color:var(--muted);}
+  .cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
+  .cal-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .cal-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
 </style>
 </head>
 <body>
@@ -156,11 +171,18 @@
     <div class="main">
       <div class="topbar">
         <h2 id="view-title">Dashboard</h2>
-        <span class="role-badge" id="role-badge">viewer</span>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="position:relative;">
+            <button class="btn btn-sm" onclick="toggleNotifPanel()">🔔 <span id="notif-count" style="display:none;background:var(--danger);color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;margin-left:4px;">0</span></button>
+            <div id="notif-panel" style="display:none;position:absolute;right:0;top:38px;width:320px;max-height:360px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);z-index:60;"></div>
+          </div>
+          <span class="role-badge" id="role-badge">viewer</span>
+        </div>
       </div>
       <div id="view-content"></div>
     </div>
   </div>
+
 </div>
 
 <!-- ================= Employee Modal ================= -->
@@ -364,6 +386,10 @@ async function initAppAfterLogin(){
   } else {
     switchView('dashboard');
   }
+
+  loadNotifications();
+  if(window._NOTIF_TIMER) clearInterval(window._NOTIF_TIMER);
+  window._NOTIF_TIMER = setInterval(loadNotifications, 60000);
 }
 
 /* Check session on load */
@@ -425,10 +451,12 @@ async function renderDashboard(){
   const content = document.getElementById('view-content');
   content.innerHTML = '<p class="muted">Loading…</p>';
 
-  const { data: employees } = await sb.from('employees').select('id,status');
-  const activeCount = (employees||[]).filter(e=>e.status==='active').length;
+  const { data: employees } = await sb.from('employees').select('id,emp_code,full_name,status');
+  const activeEmployees = (employees||[]).filter(e=>e.status==='active');
+  const activeCount = activeEmployees.length;
 
   const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
   const { data: runs } = await sb.from('payroll_runs').select('*').order('year',{ascending:false}).order('month',{ascending:false}).limit(6);
 
   let latestNet = 0, latestLabel = '—';
@@ -439,12 +467,65 @@ async function renderDashboard(){
     latestLabel = MONTH_NAMES[latest.month] + ' ' + latest.year;
   }
 
+  // Today's attendance
+  const { data: todayRows } = await sb.from('daily_attendance').select('employee_id, morning_marked_at, afternoon_marked_at').eq('date', todayStr);
+  const todayMap = {}; (todayRows||[]).forEach(r => todayMap[r.employee_id] = r);
+  const presentToday = activeEmployees.filter(e => todayMap[e.id] && (todayMap[e.id].morning_marked_at || todayMap[e.id].afternoon_marked_at)).length;
+  const absentToday = activeEmployees.filter(e => !todayMap[e.id]);
+
+  // Pending leave requests
+  const { data: pendingLeave } = await sb.from('leave_requests').select('id').eq('status','pending');
+
+  // Missing attendance this week (Mon..today, excluding holidays)
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now); monday.setDate(now.getDate() - mondayOffset);
+  const weekDates = [];
+  for(let d=0; d<=mondayOffset; d++){ const dt = new Date(monday); dt.setDate(monday.getDate()+d); weekDates.push(dt.toISOString().slice(0,10)); }
+
+  const { data: holidayRows } = await sb.from('holidays').select('date').gte('date', weekDates[0]).lte('date', todayStr);
+  const holidaySet = new Set((holidayRows||[]).map(h=>h.date));
+  const { data: weekAttRows } = await sb.from('daily_attendance').select('employee_id,date').gte('date', weekDates[0]).lte('date', todayStr);
+  const weekAttSet = new Set((weekAttRows||[]).map(r=>r.employee_id+'|'+r.date));
+  const { data: weekLeaveRows } = await sb.from('leave_requests').select('employee_id,from_date,to_date').eq('status','approved').lte('from_date', todayStr).gte('to_date', weekDates[0]);
+
+  const missingByEmployee = {};
+  activeEmployees.forEach(e=>{
+    weekDates.filter(d => d <= todayStr && !holidaySet.has(d)).forEach(d=>{
+      const onLeave = (weekLeaveRows||[]).some(lr => lr.employee_id===e.id && lr.from_date<=d && lr.to_date>=d);
+      if(!onLeave && !weekAttSet.has(e.id+'|'+d)){
+        missingByEmployee[e.id] = missingByEmployee[e.id] || { emp:e, days:[] };
+        missingByEmployee[e.id].days.push(d);
+      }
+    });
+  });
+  const missingList = Object.values(missingByEmployee);
+
   content.innerHTML = `
     <div class="grid-kpi">
       <div class="kpi"><div class="label">Active Employees</div><div class="value">${activeCount}</div></div>
-      <div class="kpi"><div class="label">Latest Payroll Run</div><div class="value">${latestLabel}</div></div>
+      <div class="kpi"><div class="label">Present Today</div><div class="value">${presentToday} / ${activeCount}</div></div>
+      <div class="kpi"><div class="label">Pending Leave Requests</div><div class="value">${(pendingLeave||[]).length}</div></div>
       <div class="kpi"><div class="label">Latest Net Payout</div><div class="value">₹${latestNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
     </div>
+
+    <div class="card">
+      <div class="section-title">Employees Absent Today (no check-in yet)</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Name</th></tr></thead>
+        <tbody>${absentToday.map(e=>`<tr><td>${e.emp_code}</td><td>${e.full_name}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Everyone has checked in today.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">This Week — Missing Attendance</div>
+      <p class="muted">Days with no check-in, no approved leave, and no holiday, from Monday through today.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Name</th><th>Missing Days</th></tr></thead>
+        <tbody>${missingList.map(m=>`<tr><td>${m.emp.emp_code}</td><td>${m.emp.full_name}</td><td>${m.days.join(', ')}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No gaps this week.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+
     <div class="card">
       <div class="section-title">Recent Payroll Runs</div>
       <div class="table-wrap"><table>
@@ -704,6 +785,41 @@ function parseCSVLine(line){
 /* ============================================================================
    ATTENDANCE
    ============================================================================ */
+function attendanceDayClass(status){
+  if(status.startsWith('Full Day')) return 'cal-full';
+  if(status.startsWith('Half Day')) return 'cal-half';
+  if(status.startsWith('Absent')) return 'cal-absent';
+  if(status.startsWith('Holiday')) return 'cal-holiday';
+  if(status.includes('Approved Leave') || status.startsWith('LWP')) return 'cal-leave';
+  if(status === 'Upcoming') return 'cal-upcoming';
+  return '';
+}
+
+function buildCalendarHTML(dayDetails, month, year){
+  const firstDow = new Date(year, month-1, 1).getDay(); // 0=Sun
+  const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let cells = dowLabels.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=0;i<firstDow;i++) cells += `<div></div>`;
+  dayDetails.forEach(d=>{
+    const dayNum = parseInt(d.date.slice(8,10));
+    cells += `<div class="cal-cell ${attendanceDayClass(d.status)}" title="${d.status}">
+      <div class="cal-day-num">${dayNum}</div>
+      <div>${d.status.length > 14 ? d.status.slice(0,13)+'…' : d.status}</div>
+    </div>`;
+  });
+  return `
+    <div class="cal-grid">${cells}</div>
+    <div class="cal-legend">
+      <span><i style="background:#e5f7ee;"></i> Full Day</span>
+      <span><i style="background:#fff8e6;"></i> Half Day</span>
+      <span><i style="background:#fdecea;"></i> Absent</span>
+      <span><i style="background:#e8eefc;"></i> Holiday</span>
+      <span><i style="background:#f3e8fc;"></i> Leave</span>
+      <span><i style="background:#f2f5f9;"></i> Upcoming</span>
+    </div>
+  `;
+}
+
 function daysInMonth(month, year){ return new Date(year, month, 0).getDate(); }
 
 async function renderAttendance(){
@@ -719,8 +835,28 @@ async function renderAttendance(){
       <label class="btn" style="margin:0;">Import CSV<input type="file" accept=".csv" style="display:none" onchange="importAttendanceCSV(event)"></label>
     </div>
     <div class="card"><div id="attendance-table" class="table-wrap"></div></div>
+
+    <div class="card">
+      <div class="section-title">View Individual Employee Calendar</div>
+      <div class="btn-row">
+        <select id="cal-employee-select" class="period-select"></select>
+        <button class="btn" onclick="loadEmployeeCalendar()">View Calendar</button>
+      </div>
+      <div id="employee-calendar-view"></div>
+    </div>
   `;
   await loadAttendanceView();
+  const employees = (await loadEmployees()).filter(e=>e.status==='active');
+  document.getElementById('cal-employee-select').innerHTML = employees.map(e=>`<option value="${e.id}">${e.emp_code} — ${e.full_name}</option>`).join('');
+}
+
+async function loadEmployeeCalendar(){
+  const empId = document.getElementById('cal-employee-select').value;
+  if(!empId) return;
+  const month = parseInt(document.getElementById('att-month').value);
+  const year = parseInt(document.getElementById('att-year').value);
+  const summary = await computeMonthlyFromDaily(empId, month, year);
+  document.getElementById('employee-calendar-view').innerHTML = buildCalendarHTML(summary.dayDetails, month, year);
 }
 
 async function loadAttendanceView(){
@@ -1029,7 +1165,7 @@ async function loadRunIntoPayslips(runId){
   if(!runId) return;
   document.getElementById('payslip-run-select').value = runId;
   const { data: run } = await sb.from('payroll_runs').select('*').eq('id', runId).single();
-  const { data: slips } = await sb.from('payslips').select('*, employees(emp_code, full_name, designation)').eq('payroll_run_id', runId);
+  const { data: slips } = await sb.from('payslips').select('*, employees(emp_code, full_name, designation, user_id)').eq('payroll_run_id', runId);
   CURRENT_RUN = run;
   CURRENT_RUN_SLIPS = slips || [];
 
@@ -1061,6 +1197,12 @@ async function finalizeRun(){
   if(!confirm('Finalize this payroll run? It will be locked from further edits.')) return;
   const { error } = await sb.from('payroll_runs').update({ status:'finalized', finalized_at: new Date().toISOString() }).eq('id', CURRENT_RUN.id);
   if(error){ toast('Failed: ' + error.message, true); return; }
+
+  const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
+  CURRENT_RUN_SLIPS.forEach(s => {
+    if(s.employees.user_id) notifyUser(s.employees.user_id, `Your payslip for ${monthLabel} is now available.`, 'payroll');
+  });
+
   toast('Payroll run finalized');
   loadRunIntoPayslips(CURRENT_RUN.id);
 }
@@ -1313,10 +1455,55 @@ async function renderSettings(){
     </div>
 
     <div class="card">
+      <div class="section-title">Holiday Calendar</div>
+      <div class="form-grid">
+        <div class="form-row"><label>Date</label><input type="date" id="new-holiday-date"></div>
+        <div class="form-row"><label>Name</label><input id="new-holiday-name" placeholder="e.g. Independence Day"></div>
+        <div class="form-row"><label>Type</label>
+          <select id="new-holiday-type">
+            <option value="national">National</option>
+            <option value="state">State</option>
+            <option value="school" selected>School</option>
+            <option value="optional">Optional</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="addHoliday()">Add Holiday</button>
+      <div class="table-wrap" style="margin-top:12px;"><table>
+        <thead><tr><th>Date</th><th>Name</th><th>Type</th><th></th></tr></thead>
+        <tbody>${(await (async()=>{
+          const { data } = await sb.from('holidays').select('*').order('date');
+          window._HOLIDAYS_CACHE = data || [];
+          return (data||[]).map(h=>`<tr><td>${h.date}</td><td>${h.name}</td><td>${h.type}</td><td><button class="btn btn-sm btn-danger" onclick="deleteHoliday('${h.id}')">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No holidays added yet.</td></tr>';
+        })())}</tbody>
+      </table></div>
+      <p class="muted">Attendance automatically treats these dates as paid — employees are never marked absent on a holiday.</p>
+    </div>
+
+    <div class="card">
       <div class="section-title">Note on TDS</div>
       <p class="muted">Income Tax (TDS) calculation is not automated in this version, per your request. Track TDS manually via Form 16 workflow, or ask to add auto-calculation later.</p>
     </div>
   `;
+}
+
+async function addHoliday(){
+  const date = document.getElementById('new-holiday-date').value;
+  const name = document.getElementById('new-holiday-name').value.trim();
+  const type = document.getElementById('new-holiday-type').value;
+  if(!date || !name){ toast('Enter a date and name.', true); return; }
+  const { error } = await sb.from('holidays').insert({ date, name, type });
+  if(error){ toast('Could not add holiday: ' + error.message, true); return; }
+  toast('Holiday added');
+  renderSettings();
+}
+
+async function deleteHoliday(id){
+  if(!confirm('Delete this holiday?')) return;
+  const { error } = await sb.from('holidays').delete().eq('id', id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+  toast('Holiday deleted');
+  renderSettings();
 }
 
 async function saveSchoolName(){
@@ -1410,6 +1597,9 @@ async function computeMonthlyFromDaily(employeeId, month, year){
   const { data: rows } = await sb.from('daily_attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate);
   const byDate = {}; (rows||[]).forEach(r => byDate[r.date] = r);
 
+  const { data: holidayRows } = await sb.from('holidays').select('*').gte('date', startDate).lte('date', endDate);
+  const holidayByDate = {}; (holidayRows||[]).forEach(h => holidayByDate[h.date] = h);
+
   // Approved leave overlapping this month takes priority over raw attendance marks
   const { data: leaveRows } = await sb.from('leave_requests').select('*')
     .eq('employee_id', employeeId).eq('status', 'approved')
@@ -1428,6 +1618,13 @@ async function computeMonthlyFromDaily(employeeId, month, year){
   const dayDetails = [];
   for(let d=1; d<=totalDays; d++){
     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    const holiday = holidayByDate[dateStr];
+    if(holiday){
+      presentEquivalent += 1;
+      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status: 'Holiday — ' + holiday.name });
+      continue;
+    }
 
     if(dateStr > todayStr){
       // Future day — nothing to judge yet, don't penalize it
@@ -1596,6 +1793,10 @@ async function loadMyHistory(){
       <div class="kpi"><div class="label">CL Used</div><div class="value">${summary.clUsed} / ${summary.clAvailable}</div></div>
       <div class="kpi"><div class="label">Loss of Pay Days</div><div class="value">${summary.lopDays}</div></div>
       <div class="kpi"><div class="label">Paid Days</div><div class="value">${summary.paidDays} / ${summary.totalDays}</div></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Monthly Calendar</div>
+      ${buildCalendarHTML(summary.dayDetails, month, year)}
     </div>
     <div class="card">
       <div class="table-wrap"><table>
@@ -1781,7 +1982,7 @@ async function loadMyLeaveHistory(){
 async function renderLeaveRequests(){
   const content = document.getElementById('view-content');
   content.innerHTML = '<p class="muted">Loading…</p>';
-  const { data: requests } = await sb.from('leave_requests').select('*, employees(emp_code, full_name)').order('requested_at',{ascending:false});
+  const { data: requests } = await sb.from('leave_requests').select('*, employees(emp_code, full_name, user_id)').order('requested_at',{ascending:false});
   const employees = await loadEmployees();
 
   content.innerHTML = `
@@ -1839,6 +2040,12 @@ async function decideLeaveRequest(id, status){
     status, admin_comments: comments, decided_at: new Date().toISOString(), decided_by: CURRENT_PROFILE.id
   }).eq('id', id);
   if(error){ toast('Failed: ' + error.message, true); return; }
+
+  const req = (window._LEAVE_REQUESTS_CACHE||[]).find(r=>r.id===id);
+  if(req && req.employees && req.employees.user_id){
+    notifyUser(req.employees.user_id, `Your ${leaveTypeLabel(req.leave_type)} request (${req.from_date} to ${req.to_date}) was ${status}${comments ? ': ' + comments : ''}.`, 'leave');
+  }
+
   toast('Leave request ' + status);
   renderLeaveRequests();
 }
@@ -1862,6 +2069,59 @@ function exportLeaveRegister(){
   const rows = requests.map(r=>[r.employees.emp_code, r.employees.full_name, leaveTypeLabel(r.leave_type), r.from_date, r.to_date, r.days, r.status, r.reason||'']);
   downloadCSV('leave_register.csv', headers, rows);
 }
+
+/* ============================================================================
+   NOTIFICATIONS
+   ============================================================================ */
+async function loadNotifications(){
+  const { data: { user } } = await sb.auth.getUser();
+  if(!user) return;
+  const { data } = await sb.from('notifications').select('*').eq('user_id', user.id).order('created_at',{ascending:false}).limit(30);
+  window._NOTIFICATIONS = data || [];
+  const unread = (data||[]).filter(n=>!n.is_read).length;
+  const countEl = document.getElementById('notif-count');
+  if(countEl){
+    countEl.textContent = unread;
+    countEl.style.display = unread > 0 ? 'inline-block' : 'none';
+  }
+  renderNotifPanel();
+}
+
+function renderNotifPanel(){
+  const panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  const notifs = window._NOTIFICATIONS || [];
+  panel.innerHTML = notifs.length ? notifs.map(n=>`
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);${n.is_read?'':'background:#eef5ff;'}cursor:pointer;" onclick="markNotifRead('${n.id}')">
+      <div style="font-size:13px;">${n.message}</div>
+      <div class="muted" style="font-size:11px;margin-top:2px;">${new Date(n.created_at).toLocaleString('en-IN')}</div>
+    </div>
+  `).join('') : '<div class="muted" style="padding:14px;">No notifications yet.</div>';
+}
+
+function toggleNotifPanel(){
+  const panel = document.getElementById('notif-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function markNotifRead(id){
+  await sb.from('notifications').update({ is_read: true }).eq('id', id);
+  loadNotifications();
+}
+
+// Helper used elsewhere (leave decisions, payroll finalization) to push a notification to a specific user
+async function notifyUser(userId, message, type='info'){
+  if(!userId) return;
+  await sb.from('notifications').insert({ user_id: userId, message, type });
+}
+
+document.addEventListener('click', (e)=>{
+  const panel = document.getElementById('notif-panel');
+  if(!panel || panel.style.display === 'none') return;
+  if(!e.target.closest('#notif-panel') && !e.target.closest('button[onclick="toggleNotifPanel()"]')){
+    panel.style.display = 'none';
+  }
+});
 </script>
 </body>
 </html>
