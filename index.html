@@ -458,7 +458,7 @@ async function renderDashboard(){
   const activeCount = activeEmployees.length;
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0,10);
+  const todayStr = localDateStr(now);
   const { data: runs } = await sb.from('payroll_runs').select('*').order('year',{ascending:false}).order('month',{ascending:false}).limit(6);
 
   let latestNet = 0, latestLabel = '—';
@@ -486,7 +486,7 @@ async function renderDashboard(){
   const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   const monday = new Date(now); monday.setDate(now.getDate() - mondayOffset);
   const weekDates = [];
-  for(let d=0; d<=mondayOffset; d++){ const dt = new Date(monday); dt.setDate(monday.getDate()+d); weekDates.push(dt.toISOString().slice(0,10)); }
+  for(let d=0; d<=mondayOffset; d++){ const dt = new Date(monday); dt.setDate(monday.getDate()+d); weekDates.push(localDateStr(dt)); }
 
   const { data: holidayRows } = await sb.from('holidays').select('date').gte('date', weekDates[0]).lte('date', todayStr);
   const holidaySet = new Set((holidayRows||[]).map(h=>h.date));
@@ -826,6 +826,19 @@ function buildCalendarHTML(dayDetails, month, year){
       <span><i style="background:#f2f5f9;"></i> Upcoming</span>
     </div>
   `;
+}
+
+// IMPORTANT: never use `date.toISOString().slice(0,10)` to get a "YYYY-MM-DD"
+// string from a local Date — toISOString() converts to UTC first, which
+// silently shifts the date backward by one day for any timezone ahead of UTC
+// (e.g. India, UTC+5:30) whenever the calculation touches local midnight.
+// This caused missing-days/holiday/leave date math to land on the wrong day.
+// Always use this local-component formatter instead.
+function localDateStr(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
 }
 
 function daysInMonth(month, year){ return new Date(year, month, 0).getDate(); }
@@ -1609,7 +1622,7 @@ async function computeMonthlyFromDaily(employeeId, month, year){
   const totalDays = daysInMonth(month, year);
   const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
   const endDate = `${year}-${String(month).padStart(2,'0')}-${String(totalDays).padStart(2,'0')}`;
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr(new Date());
 
   const { data: rows } = await sb.from('daily_attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate);
   const byDate = {}; (rows||[]).forEach(r => byDate[r.date] = r);
@@ -1626,7 +1639,7 @@ async function computeMonthlyFromDaily(employeeId, month, year){
     let d = new Date(Math.max(new Date(lr.from_date), new Date(startDate)));
     const last = new Date(Math.min(new Date(lr.to_date), new Date(endDate)));
     while(d <= last){
-      leaveByDate[d.toISOString().slice(0,10)] = lr;
+      leaveByDate[localDateStr(d)] = lr;
       d.setDate(d.getDate()+1);
     }
   });
@@ -1717,7 +1730,7 @@ async function renderMarkAttendance(){
   content.innerHTML = '<p class="muted">Loading…</p>';
 
   const today = new Date();
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = localDateStr(today);
   const { data: row } = await sb.from('daily_attendance').select('*').eq('employee_id', MY_EMPLOYEE.id).eq('date', todayStr).maybeSingle();
 
   const morningIn = !!(row && row.morning_marked_at);
@@ -1767,7 +1780,7 @@ async function renderMarkAttendance(){
       <p class="muted">Find genuinely missed punches over a date range and request them all at once. Location is not required — each day goes to your admin/accountant for approval before it counts toward your attendance.</p>
       <div class="form-grid">
         <div class="form-row"><label>From</label><input type="date" id="backfill-from"></div>
-        <div class="form-row"><label>To</label><input type="date" id="backfill-to" max="${new Date(Date.now()-86400000).toISOString().slice(0,10)}"></div>
+        <div class="form-row"><label>To</label><input type="date" id="backfill-to" max="${localDateStr(new Date(Date.now()-86400000))}"></div>
       </div>
       <button class="btn btn-sm" onclick="loadMissingDaysForBackfill()">Find Missing Days</button>
       <div id="backfill-missing-list" style="margin-top:12px;"></div>
@@ -1775,8 +1788,8 @@ async function renderMarkAttendance(){
     </div>
   `;
   const y = new Date(); y.setDate(y.getDate()-14);
-  document.getElementById('backfill-from').value = y.toISOString().slice(0,10);
-  document.getElementById('backfill-to').value = new Date(Date.now()-86400000).toISOString().slice(0,10);
+  document.getElementById('backfill-from').value = localDateStr(y);
+  document.getElementById('backfill-to').value = localDateStr(new Date(Date.now()-86400000));
   loadMyBackfillHistory();
 }
 
@@ -1808,7 +1821,7 @@ async function loadMissingDaysForBackfill(){
   const listEl = document.getElementById('backfill-missing-list');
   const fromDate = document.getElementById('backfill-from').value;
   let toDate = document.getElementById('backfill-to').value;
-  const yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const yesterday = localDateStr(new Date(Date.now()-86400000));
 
   if(!fromDate || !toDate){ toast('Choose a from and to date.', true); return; }
   if(toDate > yesterday) toDate = yesterday; // backfill is past-days only
@@ -1832,7 +1845,7 @@ async function loadMissingDaysForBackfill(){
   let cur = new Date(fromDate + 'T00:00:00');
   const end = new Date(toDate + 'T00:00:00');
   while(cur <= end){
-    const dateStr = cur.toISOString().slice(0,10);
+    const dateStr = localDateStr(cur);
     cur.setDate(cur.getDate()+1);
 
     if(holidaySet.has(dateStr) || isDefaultWeeklyHoliday(dateStr)) continue;
@@ -1921,7 +1934,7 @@ async function markAttendance(session, action){
     }
   }
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr(new Date());
   const payload = { employee_id: MY_EMPLOYEE.id, date: today };
   const col = session + (action === 'checkin' ? '_marked_at' : '_checkout_at');
   payload[col] = new Date().toISOString();
@@ -2230,12 +2243,17 @@ async function renderBackfillRequests(){
     .select('id, date, backfill_reason, backfill_status, reviewed_at, employees(emp_code, full_name, user_id)')
     .eq('is_backfill', true).order('date', { ascending:false });
 
+  const { data: finalizedRuns } = await sb.from('payroll_runs').select('month,year').eq('status','finalized');
+  const finalizedSet = new Set((finalizedRuns||[]).map(r => `${r.year}-${r.month}`));
+  window._FINALIZED_MONTHS = finalizedSet;
+
   const pendingCount = (requests||[]).filter(r=>r.backfill_status==='pending').length;
 
   content.innerHTML = `
     <div class="card">
       <div class="section-title">Attendance Backfill Requests</div>
       <p class="muted">Employees can request genuinely missed past-day punches be marked, without the usual location check — often submitted in a batch covering several days. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
+      <p class="muted">⚠ If a request's date falls in a month whose payroll is already <strong>finalized</strong>, approving it updates the attendance record but does <strong>not</strong> automatically revise that payslip — you'll need to add a manual arrear/adjustment in a future payroll run for the difference.</p>
       ${pendingCount && can('admin','accountant') ? `
         <div class="btn-row" style="margin-bottom:8px;">
           <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(true)">Select All Pending</button>
@@ -2247,19 +2265,22 @@ async function renderBackfillRequests(){
       <div class="table-wrap"><table>
         <thead><tr><th></th><th>Code</th><th>Name</th><th>Date</th><th>Reason</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          ${(requests||[]).map(r=>`
+          ${(requests||[]).map(r=>{
+            const [y,m] = r.date.split('-').map(Number);
+            const finalized = finalizedSet.has(`${y}-${m}`);
+            return `
             <tr>
               <td>${r.backfill_status==='pending' && can('admin','accountant') ? `<input type="checkbox" class="backfill-req-check" value="${r.id}">` : ''}</td>
               <td>${r.employees.emp_code}</td>
               <td>${r.employees.full_name}</td>
-              <td>${r.date}</td>
+              <td>${r.date} ${finalized ? '<span class="badge badge-terminated" title="This month is already finalized">Payroll finalized</span>' : ''}</td>
               <td>${r.backfill_reason || '—'}</td>
               <td><span class="badge badge-${r.backfill_status==='approved'?'active':r.backfill_status==='rejected'?'terminated':'inactive'}">${r.backfill_status}</span></td>
               <td>${r.backfill_status==='pending' && can('admin','accountant') ? `
                 <button class="btn btn-sm" onclick="decideBackfillRequest('${r.id}','approved')">Approve</button>
                 <button class="btn btn-sm btn-danger" onclick="decideBackfillRequest('${r.id}','rejected')">Reject</button>
               ` : ''}</td>
-            </tr>`).join('') || '<tr><td colspan="7" class="muted">No backfill requests yet.</td></tr>'}
+            </tr>`;}).join('') || '<tr><td colspan="7" class="muted">No backfill requests yet.</td></tr>'}
         </tbody>
       </table></div>
     </div>
@@ -2271,12 +2292,23 @@ function toggleAllBackfillReqChecks(checked){
   document.querySelectorAll('.backfill-req-check').forEach(cb=>cb.checked=checked);
 }
 
+// Returns a confirmation message, or null if the request is safe to skip the extra warning
+function finalizedMonthWarning(dateStr, status){
+  if(status !== 'approved') return null;
+  const [y,m] = dateStr.split('-').map(Number);
+  if(!(window._FINALIZED_MONTHS && window._FINALIZED_MONTHS.has(`${y}-${m}`))) return null;
+  return `Heads up: ${MONTH_NAMES[m]} ${y}'s payroll is already finalized. Approving this will update the attendance record, but it will NOT automatically change that payslip — you'll need to add a manual arrear/adjustment for the difference in a future payroll run.\n\nApprove anyway?`;
+}
+
 async function decideBackfillRequest(id, status){
-  if(!confirm(`${status === 'approved' ? 'Approve' : 'Reject'} this backfill request?`)) return;
+  const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
+  const warning = req ? finalizedMonthWarning(req.date, status) : null;
+  const confirmMsg = warning || `${status === 'approved' ? 'Approve' : 'Reject'} this backfill request?`;
+  if(!confirm(confirmMsg)) return;
+
   const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).eq('id', id);
   if(error){ toast('Failed: ' + error.message, true); return; }
 
-  const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
   if(req && req.employees && req.employees.user_id){
     notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.`, 'attendance');
   }
@@ -2288,13 +2320,23 @@ async function decideBackfillRequest(id, status){
 async function decideBackfillRequestsBulk(status){
   const ids = [...document.querySelectorAll('.backfill-req-check:checked')].map(cb=>cb.value);
   if(!ids.length){ toast('Select at least one request.', true); return; }
-  if(!confirm(`${status==='approved'?'Approve':'Reject'} ${ids.length} selected request${ids.length>1?'s':''}?`)) return;
+
+  const cache = window._BACKFILL_REQUESTS_CACHE || [];
+  const anyFinalized = status === 'approved' && ids.some(id => {
+    const r = cache.find(x=>x.id===id);
+    return r && finalizedMonthWarning(r.date, status);
+  });
+  const baseMsg = `${status==='approved'?'Approve':'Reject'} ${ids.length} selected request${ids.length>1?'s':''}?`;
+  const confirmMsg = anyFinalized
+    ? baseMsg + `\n\nHeads up: one or more of these dates fall in an already-finalized payroll month. Approving updates attendance records but won't automatically revise those payslips — add a manual arrear/adjustment in a future run if needed.`
+    : baseMsg;
+  if(!confirm(confirmMsg)) return;
 
   const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).in('id', ids);
   if(error){ toast('Failed: ' + error.message, true); return; }
 
   ids.forEach(id=>{
-    const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
+    const req = cache.find(r=>r.id===id);
     if(req && req.employees && req.employees.user_id){
       notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.`, 'attendance');
     }
