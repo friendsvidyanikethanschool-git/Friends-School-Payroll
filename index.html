@@ -69,6 +69,8 @@
   .badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;}
   .badge-active{background:#e5f7ee;color:var(--ok);}
   .badge-inactive{background:#f2f2f2;color:var(--muted);}
+  .badge-left{background:#fff3e0;color:var(--warn);}
+  .badge-terminated{background:#fdecea;color:var(--danger);}
   .badge-draft{background:#fff3e0;color:var(--warn);}
   .badge-finalized{background:#e5f7ee;color:var(--ok);}
 
@@ -167,24 +169,35 @@
     <h3 id="employee-modal-title">Add Employee</h3>
     <input type="hidden" id="emp-id">
     <div class="form-grid">
-      <div class="form-row"><label>Employee Code</label><input id="emp-code"></div>
+      <div class="form-row"><label>Employee Code</label><input id="emp-code" readonly style="background:#f2f5f9;color:var(--muted);"></div>
       <div class="form-row"><label>Full Name</label><input id="emp-name"></div>
       <div class="form-row"><label>Designation</label><input id="emp-designation"></div>
       <div class="form-row"><label>Department</label><input id="emp-department"></div>
       <div class="form-row"><label>Date of Joining</label><input type="date" id="emp-doj"></div>
       <div class="form-row"><label>Status</label>
-        <select id="emp-status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+        <select id="emp-status" onchange="toggleLastWorkingDay()">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="left">Left</option>
+          <option value="terminated">Terminated</option>
+        </select>
       </div>
+      <div class="form-row" id="emp-lwd-row" style="display:none;"><label>Last Working Day</label><input type="date" id="emp-lwd"></div>
       <div class="form-row"><label>Basic Pay (₹)</label><input type="number" id="emp-basic" step="0.01"></div>
       <div class="form-row"><label>HRA (₹)</label><input type="number" id="emp-hra" step="0.01"></div>
-      <div class="form-row"><label>Other Allowances (₹, total)</label><input type="number" id="emp-allowances" step="0.01"></div>
       <div class="form-row"><label>Phone</label><input id="emp-phone"></div>
       <div class="form-row"><label>Bank Name</label><input id="emp-bank-name"></div>
       <div class="form-row"><label>Bank Account No.</label><input id="emp-bank-acc"></div>
       <div class="form-row"><label>IFSC Code</label><input id="emp-ifsc"></div>
       <div class="form-row"><label>PAN No.</label><input id="emp-pan"></div>
     </div>
-    <div class="check-row"><input type="checkbox" id="emp-pf" checked> <label for="emp-pf" style="margin:0;">PF applicable</label></div>
+
+    <div class="section-title" style="margin-top:4px;">Other Salary Components</div>
+    <p class="muted" style="margin-top:-4px;">e.g. Tuition Salary, Special Allowance, Conveyance — add as many as needed.</p>
+    <div id="emp-allowance-rows"></div>
+    <button type="button" class="btn btn-sm" onclick="addAllowanceRow()">+ Add Component</button>
+
+    <div class="check-row" style="margin-top:14px;"><input type="checkbox" id="emp-pf" checked> <label for="emp-pf" style="margin:0;">PF applicable</label></div>
     <div class="check-row"><input type="checkbox" id="emp-esi" checked> <label for="emp-esi" style="margin:0;">ESI applicable</label></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('employee-modal')">Cancel</button>
@@ -210,8 +223,8 @@
 /* ============================================================================
    CONFIG — fill in your Supabase project details
    ============================================================================ */
-const SUPABASE_URL = 'https://dhvlwjnbyupsdnkzmxrx.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_AxCrCuluaJQw2aVyRWn09w_QLPlCeSM';
+const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -230,6 +243,7 @@ const NAV_STAFF = [
   { view:'dashboard', label:'Dashboard' },
   { view:'employees', label:'Employees' },
   { view:'attendance', label:'Attendance' },
+  { view:'leave-requests', label:'Leave Requests' },
   { view:'payroll', label:'Payroll Run' },
   { view:'payslips', label:'Payslips' },
   { view:'reports', label:'Reports' },
@@ -238,6 +252,7 @@ const NAV_STAFF = [
 const NAV_EMPLOYEE = [
   { view:'my-attendance', label:'Mark Attendance' },
   { view:'my-history', label:'My Attendance History' },
+  { view:'my-leave', label:'My Leave' },
   { view:'my-payslips', label:'My Payslips' }
 ];
 
@@ -384,12 +399,23 @@ function switchView(view){
   CURRENT_VIEW = view;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   const titles = { dashboard:'Dashboard', employees:'Employees', attendance:'Attendance', payroll:'Payroll Run', payslips:'Payslips', reports:'Reports', settings:'Settings',
-    'my-attendance':'Mark Attendance', 'my-history':'My Attendance History', 'my-payslips':'My Payslips' };
+    'my-attendance':'Mark Attendance', 'my-history':'My Attendance History', 'my-payslips':'My Payslips',
+    'leave-requests':'Leave Requests', 'my-leave':'My Leave' };
   document.getElementById('view-title').textContent = titles[view] || view;
   const renderers = { dashboard: renderDashboard, employees: renderEmployees, attendance: renderAttendance, payroll: renderPayroll, payslips: renderPayslips, reports: renderReports, settings: renderSettings,
-    'my-attendance': renderMarkAttendance, 'my-history': renderMyHistory, 'my-payslips': renderMyPayslips };
+    'my-attendance': renderMarkAttendance, 'my-history': renderMyHistory, 'my-payslips': renderMyPayslips,
+    'leave-requests': renderLeaveRequests, 'my-leave': renderMyLeave };
   const defaultView = (CURRENT_PROFILE && CURRENT_PROFILE.role === 'employee') ? renderMarkAttendance : renderDashboard;
   (renderers[view] || defaultView)();
+
+  // Light auto-refresh so admins/employees see near-live data without manual reloads
+  if(window._AUTO_REFRESH_TIMER) clearInterval(window._AUTO_REFRESH_TIMER);
+  const AUTO_REFRESH_VIEWS = ['dashboard','leave-requests','my-attendance'];
+  if(AUTO_REFRESH_VIEWS.includes(view)){
+    window._AUTO_REFRESH_TIMER = setInterval(()=>{
+      if(CURRENT_VIEW === view) (renderers[view] || defaultView)();
+    }, 45000);
+  }
 }
 
 /* ============================================================================
@@ -493,19 +519,41 @@ function sumAllowances(allowances){
   return Object.values(allowances).reduce((s,v)=>s+Number(v||0),0);
 }
 
+function toggleLastWorkingDay(){
+  const status = document.getElementById('emp-status').value;
+  const show = (status === 'left' || status === 'terminated');
+  document.getElementById('emp-lwd-row').style.display = show ? 'block' : 'none';
+}
+
+function addAllowanceRow(name='', amount=''){
+  const wrap = document.getElementById('emp-allowance-rows');
+  const row = document.createElement('div');
+  row.className = 'form-grid';
+  row.style.marginBottom = '6px';
+  row.innerHTML = `
+    <div class="form-row"><input class="allowance-name" placeholder="Component name (e.g. Tuition Salary)" value="${name.replace(/"/g,'&quot;')}"></div>
+    <div class="form-row" style="display:flex;gap:6px;">
+      <input class="allowance-amount" type="number" step="0.01" placeholder="Amount (₹)" value="${amount}" style="flex:1;">
+      <button type="button" class="btn btn-sm btn-danger" onclick="this.closest('.form-grid').remove()">✕</button>
+    </div>
+  `;
+  wrap.appendChild(row);
+}
+
 function openEmployeeModal(id){
   document.getElementById('employee-modal-title').textContent = id ? 'Edit Employee' : 'Add Employee';
   document.getElementById('emp-id').value = id || '';
   const e = id ? EMPLOYEES_CACHE.find(x=>x.id===id) : null;
-  document.getElementById('emp-code').value = e?.emp_code || '';
+  document.getElementById('emp-code').value = e?.emp_code || '(auto-generated on save)';
   document.getElementById('emp-name').value = e?.full_name || '';
   document.getElementById('emp-designation').value = e?.designation || '';
   document.getElementById('emp-department').value = e?.department || '';
   document.getElementById('emp-doj').value = e?.date_of_joining || '';
   document.getElementById('emp-status').value = e?.status || 'active';
+  document.getElementById('emp-lwd').value = e?.last_working_day || '';
+  toggleLastWorkingDay();
   document.getElementById('emp-basic').value = e?.basic ?? '';
   document.getElementById('emp-hra').value = e?.hra ?? '';
-  document.getElementById('emp-allowances').value = e ? sumAllowances(e.allowances) : '';
   document.getElementById('emp-phone').value = e?.phone || '';
   document.getElementById('emp-bank-name').value = e?.bank_name || '';
   document.getElementById('emp-bank-acc').value = e?.bank_account_no || '';
@@ -513,6 +561,16 @@ function openEmployeeModal(id){
   document.getElementById('emp-pan').value = e?.pan_no || '';
   document.getElementById('emp-pf').checked = e ? !!e.pf_applicable : true;
   document.getElementById('emp-esi').checked = e ? !!e.esi_applicable : true;
+
+  const rowsWrap = document.getElementById('emp-allowance-rows');
+  rowsWrap.innerHTML = '';
+  const allowances = e?.allowances || {};
+  const entries = Object.entries(allowances).filter(([k,v]) => Number(v) !== 0 || Object.keys(allowances).length);
+  if(entries.length){
+    entries.forEach(([name, amount]) => addAllowanceRow(name === 'other' ? 'Other Allowances' : name, amount));
+  } else {
+    addAllowanceRow();
+  }
   document.getElementById('employee-modal').classList.add('show');
 }
 
@@ -520,16 +578,25 @@ function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 
 async function saveEmployee(){
   const id = document.getElementById('emp-id').value;
+
+  const allowances = {};
+  document.querySelectorAll('#emp-allowance-rows .form-grid').forEach(row=>{
+    const name = row.querySelector('.allowance-name').value.trim();
+    const amount = parseFloat(row.querySelector('.allowance-amount').value || 0);
+    if(name && amount) allowances[name] = amount;
+  });
+
+  const status = document.getElementById('emp-status').value;
   const payload = {
-    emp_code: document.getElementById('emp-code').value.trim(),
     full_name: document.getElementById('emp-name').value.trim(),
     designation: document.getElementById('emp-designation').value.trim(),
     department: document.getElementById('emp-department').value.trim(),
     date_of_joining: document.getElementById('emp-doj').value || null,
-    status: document.getElementById('emp-status').value,
+    status,
+    last_working_day: (status === 'left' || status === 'terminated') ? (document.getElementById('emp-lwd').value || null) : null,
     basic: parseFloat(document.getElementById('emp-basic').value || 0),
     hra: parseFloat(document.getElementById('emp-hra').value || 0),
-    allowances: { other: parseFloat(document.getElementById('emp-allowances').value || 0) },
+    allowances,
     phone: document.getElementById('emp-phone').value.trim(),
     bank_name: document.getElementById('emp-bank-name').value.trim(),
     bank_account_no: document.getElementById('emp-bank-acc').value.trim(),
@@ -539,7 +606,7 @@ async function saveEmployee(){
     esi_applicable: document.getElementById('emp-esi').checked,
     updated_at: new Date().toISOString()
   };
-  if(!payload.emp_code || !payload.full_name){ toast('Employee code and name are required.', true); return; }
+  if(!payload.full_name){ toast('Employee name is required.', true); return; }
 
   let error;
   if(id){
@@ -581,29 +648,42 @@ async function importEmployeesCSV(event){
     return obj;
   });
 
-  const payloads = rows.map(r => ({
-    emp_code: r.emp_code,
-    full_name: r.full_name,
-    designation: r.designation || null,
-    department: r.department || null,
-    date_of_joining: r.date_of_joining || null,
-    basic: parseFloat(r.basic || 0),
-    hra: parseFloat(r.hra || 0),
-    allowances: { other: parseFloat(r.allowances || 0) },
-    pf_applicable: String(r.pf_applicable).toLowerCase() !== 'false',
-    esi_applicable: String(r.esi_applicable).toLowerCase() !== 'false',
-    phone: r.phone || null,
-    bank_name: r.bank_name || null,
-    bank_account_no: r.bank_account_no || null,
-    ifsc_code: r.ifsc_code || null,
-    pan_no: r.pan_no || null,
-    status: 'active'
-  })).filter(p => p.emp_code && p.full_name);
+  const payloads = rows.map(r => {
+    const p = {
+      full_name: r.full_name,
+      designation: r.designation || null,
+      department: r.department || null,
+      date_of_joining: r.date_of_joining || null,
+      basic: parseFloat(r.basic || 0),
+      hra: parseFloat(r.hra || 0),
+      allowances: { other: parseFloat(r.allowances || 0) },
+      pf_applicable: String(r.pf_applicable).toLowerCase() !== 'false',
+      esi_applicable: String(r.esi_applicable).toLowerCase() !== 'false',
+      phone: r.phone || null,
+      bank_name: r.bank_name || null,
+      bank_account_no: r.bank_account_no || null,
+      ifsc_code: r.ifsc_code || null,
+      pan_no: r.pan_no || null,
+      status: 'active'
+    };
+    if(r.emp_code && r.emp_code.trim()) p.emp_code = r.emp_code.trim(); // otherwise auto-generated on insert
+    return p;
+  }).filter(p => p.full_name);
 
   if(!payloads.length){ toast('No valid rows found in CSV.', true); return; }
 
-  const { error } = await sb.from('employees').upsert(payloads, { onConflict: 'emp_code' });
-  if(error){ toast('Import failed: ' + error.message, true); return; }
+  const withCode = payloads.filter(p => p.emp_code);
+  const withoutCode = payloads.filter(p => !p.emp_code);
+  let importErr = null;
+  if(withCode.length){
+    const { error } = await sb.from('employees').upsert(withCode, { onConflict: 'emp_code' });
+    if(error) importErr = error;
+  }
+  if(withoutCode.length){
+    const { error } = await sb.from('employees').insert(withoutCode);
+    if(error) importErr = error;
+  }
+  if(importErr){ toast('Import failed: ' + importErr.message, true); return; }
   toast(`Imported ${payloads.length} employees`);
   renderEmployees();
 }
@@ -1048,7 +1128,7 @@ async function renderReports(){
 async function loadReportForRun(runId){
   if(!runId){ document.getElementById('report-content').innerHTML=''; return; }
   const { data: run } = await sb.from('payroll_runs').select('*').eq('id', runId).single();
-  const { data: slips } = await sb.from('payslips').select('*, employees(emp_code, full_name)').eq('payroll_run_id', runId);
+  const { data: slips } = await sb.from('payslips').select('*, employees(emp_code, full_name, designation, department, bank_name, bank_account_no, ifsc_code)').eq('payroll_run_id', runId);
 
   const pfRows = (slips||[]).filter(s=>Number(s.pf_employee)>0 || Number(s.pf_employer)>0);
   const esiRows = (slips||[]).filter(s=>Number(s.esi_employee)>0 || Number(s.esi_employer)>0);
@@ -1057,10 +1137,55 @@ async function loadReportForRun(runId){
   const totalPF = pfRows.reduce((s,r)=>s+Number(r.pf_employee)+Number(r.pf_employer),0);
   const totalESI = esiRows.reduce((s,r)=>s+Number(r.esi_employee)+Number(r.esi_employer),0);
   const totalPT = ptRows.reduce((s,r)=>s+Number(r.professional_tax),0);
+  const totalGross = (slips||[]).reduce((s,r)=>s+Number(r.earned_gross),0);
+  const totalNet = (slips||[]).reduce((s,r)=>s+Number(r.net_pay),0);
+
+  // Department-wise breakdown for the management report
+  const byDept = {};
+  (slips||[]).forEach(s=>{
+    const dept = s.employees.department || 'Unassigned';
+    if(!byDept[dept]) byDept[dept] = { count:0, gross:0, net:0, pf:0, esi:0, pt:0 };
+    byDept[dept].count++;
+    byDept[dept].gross += Number(s.earned_gross);
+    byDept[dept].net += Number(s.net_pay);
+    byDept[dept].pf += Number(s.pf_employee)+Number(s.pf_employer);
+    byDept[dept].esi += Number(s.esi_employee)+Number(s.esi_employer);
+    byDept[dept].pt += Number(s.professional_tax);
+  });
 
   document.getElementById('report-content').innerHTML = `
     <div class="card">
-      <div class="section-title">PF Challan — ${MONTH_NAMES[run.month]} ${run.year} (Total ₹${totalPF.toLocaleString('en-IN')})</div>
+      <div class="section-title">Salary Register — ${MONTH_NAMES[run.month]} ${run.year} (${(slips||[]).length} employees)</div>
+      <div class="btn-row"><button class="btn btn-sm" onclick='exportReport(${JSON.stringify((slips||[]).map(s=>[s.employees.emp_code,s.employees.full_name,s.employees.designation||'',s.employees.department||'',s.gross,s.earned_gross,s.pf_employee,s.pf_employer,s.esi_employee,s.esi_employer,s.professional_tax,s.net_pay,s.employees.bank_name||'',s.employees.bank_account_no||'',s.employees.ifsc_code||'']))}, ["emp_code","name","designation","department","gross","earned_gross","pf_employee","pf_employer","esi_employee","esi_employer","pt","net_pay","bank_name","bank_account_no","ifsc_code"], "salary_register_${run.month}_${run.year}.csv")'>Export Salary Register (CSV)</button>
+      <button class="btn btn-sm" onclick='exportReport(${JSON.stringify((slips||[]).map(s=>[s.employees.emp_code,s.employees.full_name,s.employees.bank_name||'',s.employees.bank_account_no||'',s.employees.ifsc_code||'',s.net_pay]))}, ["emp_code","name","bank_name","bank_account_no","ifsc_code","net_pay"], "bank_transfer_${run.month}_${run.year}.csv")'>Export Bank Transfer Report (CSV)</button></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Name</th><th>Dept</th><th>Gross</th><th>Earned Gross</th><th>PF (Emp)</th><th>PF (Empr)</th><th>ESI (Emp)</th><th>ESI (Empr)</th><th>PT</th><th>Net Pay</th></tr></thead>
+        <tbody>${(slips||[]).map(s=>`<tr>
+          <td>${s.employees.emp_code}</td><td>${s.employees.full_name}</td><td>${s.employees.department||''}</td>
+          <td>₹${Number(s.gross).toLocaleString('en-IN')}</td><td>₹${Number(s.earned_gross).toLocaleString('en-IN')}</td>
+          <td>₹${Number(s.pf_employee).toLocaleString('en-IN')}</td><td>₹${Number(s.pf_employer).toLocaleString('en-IN')}</td>
+          <td>₹${Number(s.esi_employee).toLocaleString('en-IN')}</td><td>₹${Number(s.esi_employer).toLocaleString('en-IN')}</td>
+          <td>₹${Number(s.professional_tax).toLocaleString('en-IN')}</td><td><strong>₹${Number(s.net_pay).toLocaleString('en-IN')}</strong></td>
+        </tr>`).join('') || '<tr><td colspan="11" class="muted">No payslips in this run.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Management Report — Department-wise</div>
+      <div class="grid-kpi">
+        <div class="kpi"><div class="label">Total Gross</div><div class="value">₹${totalGross.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi"><div class="label">Total Net Paid</div><div class="value">₹${totalNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi"><div class="label">Total PF</div><div class="value">₹${totalPF.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi"><div class="label">Total ESI</div><div class="value">₹${totalESI.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Department</th><th>Employees</th><th>Gross</th><th>Net</th><th>PF</th><th>ESI</th><th>PT</th></tr></thead>
+        <tbody>${Object.entries(byDept).map(([dept,d])=>`<tr><td>${dept}</td><td>${d.count}</td><td>₹${d.gross.toLocaleString('en-IN')}</td><td>₹${d.net.toLocaleString('en-IN')}</td><td>₹${d.pf.toLocaleString('en-IN')}</td><td>₹${d.esi.toLocaleString('en-IN')}</td><td>₹${d.pt.toLocaleString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No data.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">PF Challan — Total ₹${totalPF.toLocaleString('en-IN')}</div>
       <div class="btn-row"><button class="btn btn-sm" onclick='exportReport(${JSON.stringify(pfRows.map(r=>[r.employees.emp_code,r.employees.full_name,r.pf_employee,r.pf_employer]))}, ["emp_code","name","pf_employee","pf_employer"], "pf_challan_${run.month}_${run.year}.csv")'>Export CSV</button></div>
       <div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Employee</th><th>Employer</th></tr></thead>
       <tbody>${pfRows.map(r=>`<tr><td>${r.employees.emp_code}</td><td>${r.employees.full_name}</td><td>₹${Number(r.pf_employee).toLocaleString('en-IN')}</td><td>₹${Number(r.pf_employer).toLocaleString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No PF-applicable employees.</td></tr>'}</tbody></table></div>
@@ -1146,10 +1271,30 @@ async function renderSettings(){
     </div>
 
     <div class="card">
-      <div class="section-title">Leave Policy</div>
-      <div class="form-row" style="max-width:220px;"><label>Casual Leave (CL) per month, no pay cut</label><input id="set-cl-per-month" type="number" step="0.5" value="${(SETTINGS.leave_policy && SETTINGS.leave_policy.cl_per_month) ?? 2}"></div>
-      <p class="muted">Days an employee is absent beyond this monthly CL allowance become Loss-of-Pay when attendance is synced from self-marking.</p>
-      <button class="btn btn-primary btn-sm" onclick="saveLeavePolicy()">Save Leave Policy</button>
+      <div class="section-title">Attendance Rules</div>
+      <div class="form-grid">
+        <div class="form-row"><label>Late-entry cutoff (24h, e.g. 09:15)</label><input id="set-late-after" value="${(SETTINGS.attendance_rules && SETTINGS.attendance_rules.late_after) || '09:15'}"></div>
+        <div class="form-row"><label>Minimum hours for Half-Day credit</label><input id="set-half-day-hours" type="number" step="0.5" value="${(SETTINGS.attendance_rules && SETTINGS.attendance_rules.half_day_min_hours) ?? 4}"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveAttendanceRules()">Save Attendance Rules</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Unplanned Absence — Monthly CL Grace</div>
+      <div class="form-row" style="max-width:280px;"><label>Days per month covered automatically when no formal leave was applied (no pay cut)</label><input id="set-cl-per-month" type="number" step="0.5" value="${(SETTINGS.leave_policy && SETTINGS.leave_policy.monthly_cl_grace) ?? 2}"></div>
+      <p class="muted">This only applies to days with no attendance mark AND no approved leave request — a safety net for forgotten punches. Formal leave (below) is tracked separately with its own balances.</p>
+      <button class="btn btn-primary btn-sm" onclick="saveLeavePolicy()">Save</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Leave Entitlements (annual, per employee)</div>
+      <div class="form-grid">
+        ${Object.entries(SETTINGS.leave_entitlements||{}).map(([type,val])=>`
+          <div class="form-row"><label>${leaveTypeLabel(type)}</label><input class="leave-entitlement-input" data-type="${type}" type="number" step="0.5" value="${val}"></div>
+        `).join('')}
+      </div>
+      <p class="muted">Leave Without Pay (LWP) has no balance — it's always available and always deducts pay. Individual employees' balances can be overridden from the Leave Requests screen.</p>
+      <button class="btn btn-primary btn-sm" onclick="saveLeaveEntitlements()">Save Entitlements</button>
     </div>
 
     <div class="card">
@@ -1204,6 +1349,13 @@ async function savePTSlabs(){
   });
 }
 
+async function saveAttendanceRules(){
+  await saveSettingKey('attendance_rules', {
+    late_after: document.getElementById('set-late-after').value.trim() || '09:15',
+    half_day_min_hours: parseFloat(document.getElementById('set-half-day-hours').value) || 4
+  });
+}
+
 async function saveLeavePolicy(){
   await saveSettingKey('leave_policy', { cl_per_month: parseFloat(document.getElementById('set-cl-per-month').value)||0 });
 }
@@ -1253,13 +1405,50 @@ async function computeMonthlyFromDaily(employeeId, month, year){
   const totalDays = daysInMonth(month, year);
   const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
   const endDate = `${year}-${String(month).padStart(2,'0')}-${String(totalDays).padStart(2,'0')}`;
+  const todayStr = new Date().toISOString().slice(0,10);
+
   const { data: rows } = await sb.from('daily_attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate);
   const byDate = {}; (rows||[]).forEach(r => byDate[r.date] = r);
 
-  let presentEquivalent = 0;
+  // Approved leave overlapping this month takes priority over raw attendance marks
+  const { data: leaveRows } = await sb.from('leave_requests').select('*')
+    .eq('employee_id', employeeId).eq('status', 'approved')
+    .lte('from_date', endDate).gte('to_date', startDate);
+  const leaveByDate = {};
+  (leaveRows||[]).forEach(lr => {
+    let d = new Date(Math.max(new Date(lr.from_date), new Date(startDate)));
+    const last = new Date(Math.min(new Date(lr.to_date), new Date(endDate)));
+    while(d <= last){
+      leaveByDate[d.toISOString().slice(0,10)] = lr;
+      d.setDate(d.getDate()+1);
+    }
+  });
+
+  let presentEquivalent = 0, unplannedAbsentEquivalent = 0, lwpDays = 0;
   const dayDetails = [];
   for(let d=1; d<=totalDays; d++){
     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    if(dateStr > todayStr){
+      // Future day — nothing to judge yet, don't penalize it
+      presentEquivalent += 1;
+      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'Upcoming' });
+      continue;
+    }
+
+    const leave = leaveByDate[dateStr];
+    if(leave){
+      if(leave.leave_type === 'LWP'){
+        lwpDays += leave.is_half_day ? 0.5 : 1;
+        dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'LWP (Approved)' });
+      } else {
+        const val = leave.is_half_day ? 0.5 : 1;
+        presentEquivalent += val;
+        dayDetails.push({ date: dateStr, morning:false, afternoon:false, status: leave.leave_type + ' (Approved Leave)' });
+      }
+      continue;
+    }
+
     const r = byDate[dateStr];
     const morning = !!(r && r.morning_marked_at);
     const afternoon = !!(r && r.afternoon_marked_at);
@@ -1267,16 +1456,19 @@ async function computeMonthlyFromDaily(employeeId, month, year){
     if(morning && afternoon){ dayValue = 1; status = 'Full Day'; }
     else if(morning || afternoon){ dayValue = 0.5; status = 'Half Day'; }
     presentEquivalent += dayValue;
+    unplannedAbsentEquivalent += round2(1 - dayValue);
     dayDetails.push({ date: dateStr, morning, afternoon, status });
   }
 
-  const absentEquivalent = round2(totalDays - presentEquivalent);
-  const clPerMonth = (SETTINGS.leave_policy && SETTINGS.leave_policy.cl_per_month) ?? 2;
-  const clUsed = Math.min(absentEquivalent, clPerMonth);
-  const lopDays = round2(absentEquivalent - clUsed);
+  // Unplanned absences (no mark, no leave applied) are covered first by the
+  // monthly CL grace allowance; anything beyond that is Loss of Pay
+  const clGrace = (SETTINGS.leave_policy && SETTINGS.leave_policy.monthly_cl_grace) ?? 2;
+  const clUsed = Math.min(unplannedAbsentEquivalent, clGrace);
+  const graceLop = round2(unplannedAbsentEquivalent - clUsed);
+  const lopDays = round2(graceLop + lwpDays);
   const paidDays = round2(totalDays - lopDays);
 
-  return { totalDays, presentEquivalent, absentEquivalent, clUsed, clAvailable: clPerMonth, lopDays, paidDays, dayDetails };
+  return { totalDays, presentEquivalent, absentEquivalent: unplannedAbsentEquivalent, clUsed, clAvailable: clGrace, lwpDays, lopDays, paidDays, dayDetails };
 }
 
 /* ============================================================================
@@ -1294,28 +1486,51 @@ async function renderMarkAttendance(){
   const todayStr = today.toISOString().slice(0,10);
   const { data: row } = await sb.from('daily_attendance').select('*').eq('employee_id', MY_EMPLOYEE.id).eq('date', todayStr).maybeSingle();
 
-  const morningDone = !!(row && row.morning_marked_at);
-  const afternoonDone = !!(row && row.afternoon_marked_at);
+  const morningIn = !!(row && row.morning_marked_at);
+  const morningOut = !!(row && row.morning_checkout_at);
+  const afternoonIn = !!(row && row.afternoon_marked_at);
+  const afternoonOut = !!(row && row.afternoon_checkout_at);
   const loc = SETTINGS.school_location || {};
+  const rules = SETTINGS.attendance_rules || { late_after: '09:15' };
+
+  const morningHours = (morningIn && morningOut) ? ((new Date(row.morning_checkout_at) - new Date(row.morning_marked_at)) / 3600000).toFixed(1) : null;
+  const afternoonHours = (afternoonIn && afternoonOut) ? ((new Date(row.afternoon_checkout_at) - new Date(row.afternoon_marked_at)) / 3600000).toFixed(1) : null;
+  const isLate = morningIn && new Date(row.morning_marked_at).toTimeString().slice(0,5) > rules.late_after;
 
   content.innerHTML = `
     <div class="card">
       <div class="section-title">Today — ${today.toLocaleDateString('en-IN',{weekday:'long', year:'numeric', month:'long', day:'numeric'})}</div>
       ${loc.enabled ? `<p class="muted">Attendance requires location access and you must be within ${loc.radius_m}m of the school.</p>` : `<p class="muted">Attendance requires location access.</p>`}
-      <div class="btn-row" style="margin-top:12px;">
-        <button class="btn ${morningDone?'':'btn-primary'}" ${morningDone?'disabled':''} onclick="markAttendance('morning')">
-          ${morningDone ? '✓ Morning marked at ' + new Date(row.morning_marked_at).toLocaleTimeString('en-IN') : 'Mark Morning Attendance'}
+      ${isLate ? `<p style="color:var(--warn);font-weight:600;">⚠ Late entry — checked in after ${rules.late_after}</p>` : ''}
+
+      <div class="section-title" style="margin-top:14px;">Morning Session</div>
+      <div class="btn-row">
+        <button class="btn ${morningIn?'':'btn-primary'}" ${morningIn?'disabled':''} onclick="markAttendance('morning','checkin')">
+          ${morningIn ? '✓ Checked in ' + new Date(row.morning_marked_at).toLocaleTimeString('en-IN') : 'Check In'}
         </button>
-        <button class="btn ${afternoonDone?'':'btn-primary'}" ${afternoonDone?'disabled':''} onclick="markAttendance('afternoon')">
-          ${afternoonDone ? '✓ Afternoon marked at ' + new Date(row.afternoon_marked_at).toLocaleTimeString('en-IN') : 'Mark Afternoon Attendance'}
+        <button class="btn ${morningOut?'':'btn-primary'}" ${(!morningIn || morningOut)?'disabled':''} onclick="markAttendance('morning','checkout')">
+          ${morningOut ? '✓ Checked out ' + new Date(row.morning_checkout_at).toLocaleTimeString('en-IN') : 'Check Out'}
         </button>
+        ${morningHours ? `<span class="muted" style="align-self:center;">${morningHours} hrs</span>` : ''}
       </div>
+
+      <div class="section-title">Afternoon Session</div>
+      <div class="btn-row">
+        <button class="btn ${afternoonIn?'':'btn-primary'}" ${afternoonIn?'disabled':''} onclick="markAttendance('afternoon','checkin')">
+          ${afternoonIn ? '✓ Checked in ' + new Date(row.afternoon_marked_at).toLocaleTimeString('en-IN') : 'Check In'}
+        </button>
+        <button class="btn ${afternoonOut?'':'btn-primary'}" ${(!afternoonIn || afternoonOut)?'disabled':''} onclick="markAttendance('afternoon','checkout')">
+          ${afternoonOut ? '✓ Checked out ' + new Date(row.afternoon_checkout_at).toLocaleTimeString('en-IN') : 'Check Out'}
+        </button>
+        ${afternoonHours ? `<span class="muted" style="align-self:center;">${afternoonHours} hrs</span>` : ''}
+      </div>
+
       <div id="mark-attendance-status" class="muted" style="margin-top:10px;"></div>
     </div>
   `;
 }
 
-async function markAttendance(session){
+async function markAttendance(session, action){
   const statusEl = document.getElementById('mark-attendance-status');
   statusEl.textContent = 'Getting your location…';
   let pos;
@@ -1339,20 +1554,17 @@ async function markAttendance(session){
 
   const today = new Date().toISOString().slice(0,10);
   const payload = { employee_id: MY_EMPLOYEE.id, date: today };
-  if(session === 'morning'){
-    payload.morning_marked_at = new Date().toISOString();
-    payload.morning_lat = pos.coords.latitude;
-    payload.morning_lng = pos.coords.longitude;
-  } else {
-    payload.afternoon_marked_at = new Date().toISOString();
-    payload.afternoon_lat = pos.coords.latitude;
-    payload.afternoon_lng = pos.coords.longitude;
+  const col = session + (action === 'checkin' ? '_marked_at' : '_checkout_at');
+  payload[col] = new Date().toISOString();
+  if(action === 'checkin'){
+    payload[session + '_lat'] = pos.coords.latitude;
+    payload[session + '_lng'] = pos.coords.longitude;
   }
 
   const { error } = await sb.from('daily_attendance').upsert(payload, { onConflict: 'employee_id,date' });
   statusEl.textContent = '';
   if(error){ toast('Could not mark attendance: ' + error.message, true); return; }
-  toast((session === 'morning' ? 'Morning' : 'Afternoon') + ' attendance marked');
+  toast((session === 'morning' ? 'Morning' : 'Afternoon') + ' ' + (action==='checkin'?'check-in':'check-out') + ' recorded');
   renderMarkAttendance();
 }
 
@@ -1439,6 +1651,216 @@ function viewMyPayslip(slip){
   const monthLabel = `${MONTH_NAMES[slip.payroll_runs.month]} ${slip.payroll_runs.year}`;
   document.getElementById('print-area').innerHTML = renderPayslipHTML(monthLabel, MY_EMPLOYEE.full_name, MY_EMPLOYEE.emp_code, MY_EMPLOYEE.designation, slip.breakdown);
   document.getElementById('payslip-modal').classList.add('show');
+}
+
+/* ============================================================================
+   LEAVE MANAGEMENT
+   ============================================================================ */
+const LEAVE_TYPES = ['CL','SL','EL','MATERNITY','PATERNITY','COMP_OFF','LWP'];
+function leaveTypeLabel(type){
+  return { CL:'Casual Leave', SL:'Sick Leave', EL:'Earned Leave', MATERNITY:'Maternity Leave',
+    PATERNITY:'Paternity Leave', COMP_OFF:'Compensatory Off', LWP:'Leave Without Pay' }[type] || type;
+}
+
+async function saveLeaveEntitlements(){
+  const entitlements = {};
+  document.querySelectorAll('.leave-entitlement-input').forEach(inp=>{
+    entitlements[inp.dataset.type] = parseFloat(inp.value)||0;
+  });
+  await saveSettingKey('leave_entitlements', entitlements);
+}
+
+// Balance = (per-employee override in leave_balances, else the Settings default) minus approved days used this year
+async function getLeaveBalance(employeeId, leaveType, year){
+  if(leaveType === 'LWP') return { allocated: null, used: null, balance: null }; // unlimited, no balance tracked
+
+  const defaultAllocated = (SETTINGS.leave_entitlements && SETTINGS.leave_entitlements[leaveType]) ?? 0;
+  const { data: overrideRow } = await sb.from('leave_balances').select('*').eq('employee_id', employeeId).eq('leave_type', leaveType).eq('year', year).maybeSingle();
+  const allocated = overrideRow ? Number(overrideRow.allocated) : defaultAllocated;
+
+  const { data: used } = await sb.from('leave_requests').select('days')
+    .eq('employee_id', employeeId).eq('leave_type', leaveType).eq('status','approved')
+    .gte('from_date', `${year}-01-01`).lte('to_date', `${year}-12-31`);
+  const usedDays = (used||[]).reduce((s,r)=>s+Number(r.days),0);
+
+  return { allocated, used: usedDays, balance: round2(allocated - usedDays) };
+}
+
+/* ---------- Employee: Apply / Balance / History ---------- */
+async function renderMyLeave(){
+  const content = document.getElementById('view-content');
+  if(!MY_EMPLOYEE){ content.innerHTML = '<div class="card muted">Your login is not linked to an employee record yet.</div>'; return; }
+  content.innerHTML = '<p class="muted">Loading…</p>';
+  const year = new Date().getFullYear();
+
+  const balances = await Promise.all(LEAVE_TYPES.filter(t=>t!=='LWP').map(async t => ({ type:t, ...(await getLeaveBalance(MY_EMPLOYEE.id, t, year)) })));
+
+  content.innerHTML = `
+    <div class="card">
+      <div class="section-title">Apply for Leave</div>
+      <div class="form-grid">
+        <div class="form-row"><label>Leave Type</label>
+          <select id="lv-type">${LEAVE_TYPES.map(t=>`<option value="${t}">${leaveTypeLabel(t)}</option>`).join('')}</select>
+        </div>
+        <div class="form-row"><label>&nbsp;</label>
+          <div class="check-row" style="margin:0;"><input type="checkbox" id="lv-half-day"> <label for="lv-half-day" style="margin:0;">Half-Day</label></div>
+        </div>
+        <div class="form-row"><label>From Date</label><input type="date" id="lv-from"></div>
+        <div class="form-row"><label>To Date</label><input type="date" id="lv-to"></div>
+      </div>
+      <div class="form-row"><label>Reason</label><input id="lv-reason" placeholder="Brief reason"></div>
+      <div class="form-row"><label>Certificate note (optional)</label><input id="lv-cert-note" placeholder="e.g. Medical certificate submitted to office"></div>
+      <button class="btn btn-primary btn-sm" onclick="submitLeaveApplication()">Submit Application</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Leave Balance (${year})</div>
+      <div class="grid-kpi">
+        ${balances.map(b=>`<div class="kpi"><div class="label">${leaveTypeLabel(b.type)}</div><div class="value">${b.balance} / ${b.allocated}</div></div>`).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Leave History</div>
+      <div id="my-leave-history"><p class="muted">Loading…</p></div>
+    </div>
+  `;
+  loadMyLeaveHistory();
+}
+
+async function submitLeaveApplication(){
+  const leaveType = document.getElementById('lv-type').value;
+  const isHalfDay = document.getElementById('lv-half-day').checked;
+  const fromDate = document.getElementById('lv-from').value;
+  const toDate = isHalfDay ? fromDate : document.getElementById('lv-to').value;
+  const reason = document.getElementById('lv-reason').value.trim();
+  const certNote = document.getElementById('lv-cert-note').value.trim();
+
+  if(!fromDate || !toDate){ toast('Choose from/to dates.', true); return; }
+  if(new Date(toDate) < new Date(fromDate)){ toast('To Date cannot be before From Date.', true); return; }
+
+  const days = isHalfDay ? 0.5 : (Math.round((new Date(toDate)-new Date(fromDate))/86400000) + 1);
+
+  const { error } = await sb.from('leave_requests').insert({
+    employee_id: MY_EMPLOYEE.id,
+    leave_type: leaveType,
+    from_date: fromDate,
+    to_date: toDate,
+    is_half_day: isHalfDay,
+    days,
+    reason: reason || null,
+    certificate_note: certNote || null,
+    status: 'pending'
+  });
+  if(error){ toast('Could not submit: ' + error.message, true); return; }
+  toast('Leave application submitted');
+  renderMyLeave();
+}
+
+async function loadMyLeaveHistory(){
+  const { data: requests } = await sb.from('leave_requests').select('*').eq('employee_id', MY_EMPLOYEE.id).order('requested_at',{ascending:false});
+  document.getElementById('my-leave-history').innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Admin Comments</th></tr></thead>
+      <tbody>
+        ${(requests||[]).map(r=>`
+          <tr>
+            <td>${leaveTypeLabel(r.leave_type)}</td>
+            <td>${r.from_date}</td>
+            <td>${r.to_date}</td>
+            <td>${r.days}</td>
+            <td><span class="badge badge-${r.status==='approved'?'active':r.status==='rejected'?'terminated':'inactive'}">${r.status}</span></td>
+            <td>${r.admin_comments || '—'}</td>
+          </tr>`).join('') || '<tr><td colspan="6" class="muted">No leave applications yet.</td></tr>'}
+      </tbody>
+    </table></div>
+  `;
+}
+
+/* ---------- Admin: Leave Requests, Balances, Register ---------- */
+async function renderLeaveRequests(){
+  const content = document.getElementById('view-content');
+  content.innerHTML = '<p class="muted">Loading…</p>';
+  const { data: requests } = await sb.from('leave_requests').select('*, employees(emp_code, full_name)').order('requested_at',{ascending:false});
+  const employees = await loadEmployees();
+
+  content.innerHTML = `
+    <div class="card">
+      <div class="section-title">Leave Requests</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${(requests||[]).map(r=>`
+            <tr>
+              <td>${r.employees.emp_code}</td>
+              <td>${r.employees.full_name}</td>
+              <td>${leaveTypeLabel(r.leave_type)}</td>
+              <td>${r.from_date}</td>
+              <td>${r.to_date}</td>
+              <td>${r.days}</td>
+              <td>${r.reason||'—'}</td>
+              <td><span class="badge badge-${r.status==='approved'?'active':r.status==='rejected'?'terminated':'inactive'}">${r.status}</span></td>
+              <td>${r.status==='pending' && can('admin','accountant') ? `
+                <button class="btn btn-sm" onclick="decideLeaveRequest('${r.id}','approved')">Approve</button>
+                <button class="btn btn-sm btn-danger" onclick="decideLeaveRequest('${r.id}','rejected')">Reject</button>
+              ` : ''}</td>
+            </tr>`).join('') || '<tr><td colspan="9" class="muted">No leave requests yet.</td></tr>'}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Leave Balances — ${new Date().getFullYear()}</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Name</th>${LEAVE_TYPES.filter(t=>t!=='LWP').map(t=>`<th>${leaveTypeLabel(t)}</th>`).join('')}</tr></thead>
+        <tbody id="leave-balance-table"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
+      </table></div>
+      <button class="btn btn-sm" style="margin-top:10px;" onclick="exportLeaveRegister()">Export Leave Register (CSV)</button>
+    </div>
+  `;
+
+  const year = new Date().getFullYear();
+  const activeEmployees = employees.filter(e=>e.status==='active');
+  const rowsHtml = await Promise.all(activeEmployees.map(async e=>{
+    const balances = await Promise.all(LEAVE_TYPES.filter(t=>t!=='LWP').map(t=>getLeaveBalance(e.id, t, year)));
+    return `<tr>
+      <td>${e.emp_code}</td><td>${e.full_name}</td>
+      ${balances.map((b,i)=>`<td>${b.balance}/${b.allocated} <button class="btn btn-sm" style="padding:2px 6px;" onclick="editLeaveBalance('${e.id}','${LEAVE_TYPES.filter(t=>t!=='LWP')[i]}', ${b.allocated})">✎</button></td>`).join('')}
+    </tr>`;
+  }));
+  document.getElementById('leave-balance-table').innerHTML = rowsHtml.join('') || '<tr><td colspan="8" class="muted">No active employees.</td></tr>';
+
+  window._LEAVE_REQUESTS_CACHE = requests || [];
+}
+
+async function decideLeaveRequest(id, status){
+  const comments = prompt(status==='approved' ? 'Add an approval comment (optional):' : 'Reason for rejection (optional):') || null;
+  const { error } = await sb.from('leave_requests').update({
+    status, admin_comments: comments, decided_at: new Date().toISOString(), decided_by: CURRENT_PROFILE.id
+  }).eq('id', id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+  toast('Leave request ' + status);
+  renderLeaveRequests();
+}
+
+async function editLeaveBalance(employeeId, leaveType, currentAllocated){
+  const val = prompt(`New annual allocation for ${leaveTypeLabel(leaveType)}:`, currentAllocated);
+  if(val === null) return;
+  const allocated = parseFloat(val);
+  if(isNaN(allocated)){ toast('Enter a valid number.', true); return; }
+  const year = new Date().getFullYear();
+  const { error } = await sb.from('leave_balances').upsert({ employee_id: employeeId, leave_type: leaveType, year, allocated }, { onConflict: 'employee_id,leave_type,year' });
+  if(error){ toast('Failed: ' + error.message, true); return; }
+  toast('Balance updated');
+  renderLeaveRequests();
+}
+
+function exportLeaveRegister(){
+  const requests = window._LEAVE_REQUESTS_CACHE || [];
+  if(!requests.length){ toast('Nothing to export.', true); return; }
+  const headers = ['emp_code','full_name','leave_type','from_date','to_date','days','status','reason'];
+  const rows = requests.map(r=>[r.employees.emp_code, r.employees.full_name, leaveTypeLabel(r.leave_type), r.from_date, r.to_date, r.days, r.status, r.reason||'']);
+  downloadCSV('leave_register.csv', headers, rows);
 }
 </script>
 </body>
