@@ -102,6 +102,15 @@
     body *{visibility:hidden;}
     #print-area, #print-area *{visibility:visible;}
     #print-area{position:absolute;left:0;top:0;width:100%;}
+    /* The payslip modal itself is capped at max-height:88vh with
+       overflow-y:auto for on-screen scrolling. That overflow clipping still
+       applies to #print-area even though it's position:absolute and even
+       though everything else is visibility:hidden — an ancestor's overflow
+       clip isn't cancelled by visibility, so any payslip taller than 88% of
+       the screen (e.g. one with an Arrears line added) was getting cut off
+       mid-page when printed. Release the clip for print only. */
+    .modal{overflow:visible !important;max-height:none !important;}
+    .overlay{position:static !important;background:none !important;display:block !important;}
   }
 
   .toast{position:fixed;bottom:20px;right:20px;background:#1c2733;color:#fff;padding:11px 18px;border-radius:8px;font-size:13.5px;z-index:100;box-shadow:0 8px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(10px);transition:all .25s;}
@@ -1441,12 +1450,31 @@ async function finalizeRun(){
 async function reopenRun(){
   if(!CURRENT_RUN) return;
   const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
+
+  // If this month has ever had arrears created *from* it (i.e. someone
+  // approved a backfill for a date in this month while it was finalized),
+  // fixing this month's attendance directly now and re-saving will pay
+  // those same days a second time via whichever run pays the arrear — the
+  // two repair paths (correct the month directly vs. let it flow as an
+  // arrear) are mutually exclusive for the same day. Surface that clearly
+  // before letting the admin proceed, since it isn't obvious from the UI.
+  const { data: relatedArrears } = await sb.from('arrears')
+    .select('amount, status, source_date, employees(emp_code, full_name)')
+    .eq('source_month', CURRENT_RUN.month).eq('source_year', CURRENT_RUN.year)
+    .neq('status', 'cancelled');
+  let arrearsWarning = '';
+  if(relatedArrears && relatedArrears.length){
+    const lines = relatedArrears.map(a => `  • ${a.employees.emp_code} ${a.employees.full_name} — ₹${Number(a.amount).toLocaleString('en-IN')} (${a.source_date}, ${a.status})`).join('\n');
+    arrearsWarning = `\n\n⚠ DOUBLE-PAY RISK: ${relatedArrears.length} arrear(s) already exist for days in ${monthLabel}:\n${lines}\n\nIf you're about to correct this month's attendance directly and re-save, these same days will get paid AGAIN through whichever run pays the arrear above. Go cancel the ones covered by your correction first (Reconcile Arrears), unless you specifically intend to keep both.`;
+  }
+
   const ok = confirm(
     `Reopen ${monthLabel} for editing?\n\n` +
     `This sets it back to "draft" so you can re-run Payroll Run and Save as Draft again. ` +
     `Employees may have already seen the old payslip and any "payslip available" notification already sent won't be un-sent. ` +
-    `Any pending arrears for later months are unaffected either way.\n\n` +
-    `Reopen anyway?`
+    `Any pending arrears for later months are unaffected either way.` +
+    arrearsWarning +
+    `\n\nReopen anyway?`
   );
   if(!ok) return;
 
