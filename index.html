@@ -102,15 +102,6 @@
     body *{visibility:hidden;}
     #print-area, #print-area *{visibility:visible;}
     #print-area{position:absolute;left:0;top:0;width:100%;}
-    /* The payslip modal itself is capped at max-height:88vh with
-       overflow-y:auto for on-screen scrolling. That overflow clipping still
-       applies to #print-area even though it's position:absolute and even
-       though everything else is visibility:hidden — an ancestor's overflow
-       clip isn't cancelled by visibility, so any payslip taller than 88% of
-       the screen (e.g. one with an Arrears line added) was getting cut off
-       mid-page when printed. Release the clip for print only. */
-    .modal{overflow:visible !important;max-height:none !important;}
-    .overlay{position:static !important;background:none !important;display:block !important;}
   }
 
   .toast{position:fixed;bottom:20px;right:20px;background:#1c2733;color:#fff;padding:11px 18px;border-radius:8px;font-size:13.5px;z-index:100;box-shadow:0 8px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(10px);transition:all .25s;}
@@ -130,6 +121,7 @@
   .cal-cell.cal-holiday{background:#e8eefc;border-color:#c6d4f5;}
   .cal-cell.cal-leave{background:#f3e8fc;border-color:#dcc2f5;}
   .cal-cell.cal-pending{background:#fff4e5;border-color:#f5c67d;}
+  .cal-cell.cal-arrear{background:#eef2ff;border-color:#c7d2fe;}
   .cal-cell.cal-upcoming{background:#f2f5f9;color:var(--muted);}
   .cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
   .cal-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -801,6 +793,7 @@ function parseCSVLine(line){
    ATTENDANCE
    ============================================================================ */
 function attendanceDayClass(status){
+  if(status.startsWith('Paid via Arrear')) return 'cal-arrear';
   if(status.startsWith('Full Day')) return 'cal-full';
   if(status.startsWith('Half Day')) return 'cal-half';
   if(status.startsWith('Backfill Pending')) return 'cal-pending';
@@ -832,6 +825,7 @@ function buildCalendarHTML(dayDetails, month, year){
       <span><i style="background:#e8eefc;"></i> Holiday</span>
       <span><i style="background:#f3e8fc;"></i> Leave</span>
       <span><i style="background:#fff4e5;"></i> Backfill Pending</span>
+      <span><i style="background:#eef2ff;"></i> Paid via Arrear</span>
       <span><i style="background:#f2f5f9;"></i> Upcoming</span>
     </div>
   `;
@@ -1451,29 +1445,16 @@ async function reopenRun(){
   if(!CURRENT_RUN) return;
   const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
 
-  // If this month has ever had arrears created *from* it (i.e. someone
-  // approved a backfill for a date in this month while it was finalized),
-  // fixing this month's attendance directly now and re-saving will pay
-  // those same days a second time via whichever run pays the arrear — the
-  // two repair paths (correct the month directly vs. let it flow as an
-  // arrear) are mutually exclusive for the same day. Surface that clearly
-  // before letting the admin proceed, since it isn't obvious from the UI.
-  const { data: relatedArrears } = await sb.from('arrears')
-    .select('amount, status, source_date, employees(emp_code, full_name)')
-    .eq('source_month', CURRENT_RUN.month).eq('source_year', CURRENT_RUN.year)
-    .neq('status', 'cancelled');
-  let arrearsWarning = '';
-  if(relatedArrears && relatedArrears.length){
-    const lines = relatedArrears.map(a => `  • ${a.employees.emp_code} ${a.employees.full_name} — ₹${Number(a.amount).toLocaleString('en-IN')} (${a.source_date}, ${a.status})`).join('\n');
-    arrearsWarning = `\n\n⚠ DOUBLE-PAY RISK: ${relatedArrears.length} arrear(s) already exist for days in ${monthLabel}:\n${lines}\n\nIf you're about to correct this month's attendance directly and re-save, these same days will get paid AGAIN through whichever run pays the arrear above. Go cancel the ones covered by your correction first (Reconcile Arrears), unless you specifically intend to keep both.`;
-  }
+  const { data: sourcedArrears } = await sb.from('arrears').select('amount,status').eq('source_month', CURRENT_RUN.month).eq('source_year', CURRENT_RUN.year).neq('status','cancelled');
+  const arrearNote = (sourcedArrears && sourcedArrears.length)
+    ? `\n\nHeads up: ${sourcedArrears.length} backfill-driven arrear(s) totaling ₹${sourcedArrears.reduce((s,a)=>s+Number(a.amount),0).toLocaleString('en-IN')} came from backfilled days in THIS month. When you re-save this run, those specific days are automatically excluded from this month's own pay (they're compensated via the arrear instead), so re-saving won't double-pay them. If you meant to have those days paid directly in this month instead, cancel the corresponding arrear(s) first via Reconcile Arrears.`
+    : '';
 
   const ok = confirm(
     `Reopen ${monthLabel} for editing?\n\n` +
     `This sets it back to "draft" so you can re-run Payroll Run and Save as Draft again. ` +
-    `Employees may have already seen the old payslip and any "payslip available" notification already sent won't be un-sent. ` +
-    `Any pending arrears for later months are unaffected either way.` +
-    arrearsWarning +
+    `Employees may have already seen the old payslip and any "payslip available" notification already sent won't be un-sent.` +
+    arrearNote +
     `\n\nReopen anyway?`
   );
   if(!ok) return;
@@ -1872,13 +1853,24 @@ function haversineMeters(lat1, lng1, lat2, lng2){
    MONTHLY CL / LOP COMPUTATION FROM DAILY SELF-ATTENDANCE
    ============================================================================ */
 async function computeMonthlyFromDaily(employeeId, month, year){
-  const totalDays = daysInMonth(month, year);
+  let totalDays = daysInMonth(month, year);
   const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
   const endDate = `${year}-${String(month).padStart(2,'0')}-${String(totalDays).padStart(2,'0')}`;
   const todayStr = localDateStr(new Date());
 
   const { data: rows } = await sb.from('daily_attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate);
   const byDate = {}; (rows||[]).forEach(r => byDate[r.date] = r);
+
+  // Days already paid out via the arrears mechanism (created when a backfill
+  // was approved after this exact month had already been finalized) must be
+  // excluded from THIS month's own paid-days count. Without this, reopening
+  // a finalized run and resyncing/resaving it would credit the day twice:
+  // once here (full day, since it's now an approved backfill) and once via
+  // the arrear already sitting in a later month's payslip. 'cancelled'
+  // arrears don't count — those were reversed and never paid.
+  const { data: arrearRows } = await sb.from('arrears').select('source_date,status').eq('employee_id', employeeId).gte('source_date', startDate).lte('source_date', endDate).neq('status','cancelled');
+  const arrearDateSet = new Set((arrearRows||[]).map(a=>a.source_date));
+  let arrearedDaysCount = 0;
 
   const { data: holidayRows } = await sb.from('holidays').select('*').gte('date', startDate).lte('date', endDate);
   const holidayByDate = {}; (holidayRows||[]).forEach(h => holidayByDate[h.date] = h);
@@ -1950,6 +1942,13 @@ async function computeMonthlyFromDaily(employeeId, month, year){
     const morning = !!(r && r.morning_marked_at);
     const afternoon = !!(r && r.afternoon_marked_at);
     const backfilled = !!(r && r.is_backfill && r.backfill_status === 'approved');
+
+    if(backfilled && arrearDateSet.has(dateStr)){
+      arrearedDaysCount += 1;
+      dayDetails.push({ date: dateStr, morning, afternoon, status: 'Paid via Arrear (excluded from this month — see next payroll run)' });
+      continue;
+    }
+
     let dayValue = 0, status = 'Absent';
     if(morning && afternoon){ dayValue = 1; status = backfilled ? 'Full Day (Backfilled)' : 'Full Day'; }
     else if(morning || afternoon){ dayValue = 0.5; status = backfilled ? 'Half Day (Backfilled)' : 'Half Day'; }
@@ -1957,6 +1956,7 @@ async function computeMonthlyFromDaily(employeeId, month, year){
     unplannedAbsentEquivalent += round2(1 - dayValue);
     dayDetails.push({ date: dateStr, morning, afternoon, status });
   }
+  totalDays -= arrearedDaysCount; // keep the ratio fair — pulled out of both sides
 
   // Unplanned absences (no mark, no approved backfill, no leave applied) are
   // Loss of Pay outright. Casual Leave is never applied automatically —
@@ -2643,6 +2643,22 @@ async function scanForMissedArrears(){
   renderBackfillRequests();
 }
 
+// If a request that had already been approved (and possibly turned into an
+// arrear via createArrearForBackfill) gets flipped to rejected, the arrear
+// must not silently keep paying out. A 'pending' arrear is safe to cancel
+// outright — nothing has been paid yet. An 'applied' one means real money
+// already went out on a payslip; that needs a human decision, so this flags
+// it instead of touching it.
+async function cancelOrphanArrear(employeeId, dateStr){
+  const { data: existing } = await sb.from('arrears').select('id,status,amount').eq('employee_id', employeeId).eq('source_date', dateStr).maybeSingle();
+  if(!existing || existing.status === 'cancelled') return '';
+  if(existing.status === 'pending'){
+    await sb.from('arrears').update({ status: 'cancelled' }).eq('id', existing.id);
+    return ' A pending arrear queued for that date was cancelled.';
+  }
+  return ` WARNING: an arrear of ₹${Number(existing.amount).toLocaleString('en-IN')} for that date was already applied to a payslip — rejecting this request did NOT reverse it. Use "Reconcile Arrears" to cancel or adjust it by hand.`;
+}
+
 async function decideBackfillRequest(id, status){
   const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
   const warning = req ? finalizedMonthWarning(req.date, status) : null;
@@ -2653,15 +2669,19 @@ async function decideBackfillRequest(id, status){
   if(error){ toast('Failed: ' + error.message, true); return; }
 
   let arrearAmount = null;
+  let reversalMsg = '';
   if(status === 'approved' && req){
     arrearAmount = await createArrearForBackfill(req.employee_id || req.employees?.id, req.date);
+  }
+  if(status === 'rejected' && req){
+    reversalMsg = await cancelOrphanArrear(req.employee_id || req.employees?.id, req.date);
   }
 
   if(req && req.employees && req.employees.user_id){
     notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.` + (arrearAmount ? ` An arrear of ₹${arrearAmount.toLocaleString('en-IN')} will be added to your next payslip.` : ''), 'attendance');
   }
 
-  toast('Backfill request ' + status + (arrearAmount ? ` — ₹${arrearAmount.toLocaleString('en-IN')} arrear queued for next payroll run` : ''));
+  toast('Backfill request ' + status + (arrearAmount ? ` — ₹${arrearAmount.toLocaleString('en-IN')} arrear queued for next payroll run` : '') + reversalMsg, !!reversalMsg && reversalMsg.startsWith(' WARNING'));
   renderBackfillRequests();
 }
 
@@ -2684,20 +2704,26 @@ async function decideBackfillRequestsBulk(status){
   if(error){ toast('Failed: ' + error.message, true); return; }
 
   let arrearsCreated = 0;
+  let reversalWarnings = 0;
   for(const id of ids){
     const req = cache.find(r=>r.id===id);
     if(!req) continue;
     let arrearAmount = null;
+    let reversalMsg = '';
     if(status === 'approved'){
       arrearAmount = await createArrearForBackfill(req.employee_id || req.employees?.id, req.date);
       if(arrearAmount) arrearsCreated++;
+    }
+    if(status === 'rejected'){
+      reversalMsg = await cancelOrphanArrear(req.employee_id || req.employees?.id, req.date);
+      if(reversalMsg.startsWith(' WARNING')) reversalWarnings++;
     }
     if(req.employees && req.employees.user_id){
       notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.` + (arrearAmount ? ` An arrear of ₹${arrearAmount.toLocaleString('en-IN')} will be added to your next payslip.` : ''), 'attendance');
     }
   }
 
-  toast(`${ids.length} backfill request${ids.length>1?'s':''} ${status}` + (arrearsCreated ? ` — ${arrearsCreated} arrear(s) queued` : ''));
+  toast(`${ids.length} backfill request${ids.length>1?'s':''} ${status}` + (arrearsCreated ? ` — ${arrearsCreated} arrear(s) queued` : '') + (reversalWarnings ? ` — ${reversalWarnings} already-applied arrear(s) need manual reconciliation` : ''), reversalWarnings > 0);
   renderBackfillRequests();
 }
 
