@@ -841,6 +841,13 @@ function localDateStr(d){
   return `${y}-${m}-${day}`;
 }
 
+// Financial Year runs June through May. FY is identified by its starting
+// calendar year — e.g. June 2026 through May 2027 is FY "2026" (labeled "FY 2026-27").
+function fyStartYear(month, year){ return month >= 6 ? year : year - 1; }
+function currentFYStartYear(){ const now = new Date(); return fyStartYear(now.getMonth()+1, now.getFullYear()); }
+function fyLabel(fyYear){ return `FY ${fyYear}-${String(fyYear+1).slice(-2)}`; }
+function fyDateRange(fyYear){ return { start: `${fyYear}-06-01`, end: `${fyYear+1}-05-31` }; }
+
 function daysInMonth(month, year){ return new Date(year, month, 0).getDate(); }
 
 // Sundays and the 2nd Saturday of every month are holidays by default, even
@@ -1114,8 +1121,10 @@ async function renderPayroll(){
     </div></div>
     <div class="card">
       <div class="section-title">Pending Arrears Queue</div>
-      <p class="muted">These will be pulled into whichever month you next preview and save — not necessarily the month shown above.</p>
+      <p class="muted">These will be pulled into whichever month you next preview and save — not necessarily the month shown above. Only counted as paid once you actually click "Save as Draft" on that run (previewing alone never consumes them).</p>
       <div id="pending-arrears-list"><p class="muted">Loading…</p></div>
+      ${can('admin','accountant') ? `<button class="btn btn-sm" style="margin-top:10px;" onclick="toggleReconcileArrears()">Reconcile Arrears (view all / fix a stuck one)</button>` : ''}
+      <div id="reconcile-arrears-panel" style="display:none;margin-top:10px;"></div>
     </div>
   `;
   loadPendingArrearsList();
@@ -1133,6 +1142,78 @@ async function loadPendingArrearsList(){
       </tbody>
     </table></div>
   `;
+}
+
+async function toggleReconcileArrears(){
+  const panel = document.getElementById('reconcile-arrears-panel');
+  if(panel.style.display === 'none'){
+    panel.style.display = 'block';
+    await loadReconcilePanel();
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function loadReconcilePanel(){
+  const panel = document.getElementById('reconcile-arrears-panel');
+  panel.innerHTML = '<p class="muted">Loading…</p>';
+  const { data: arrears } = await sb.from('arrears').select('*, employees(emp_code, full_name)').order('created_at',{ascending:false});
+  const { data: runs } = await sb.from('payroll_runs').select('id,month,year').order('year',{ascending:false}).order('month',{ascending:false});
+
+  panel.innerHTML = `
+    <p class="muted">Every arrear ever created, whatever its status. If one is stuck "pending" for longer than expected (e.g. reappearing every month at the same amount), that's the RLS/permission failure this tool exists to fix — mark it applied to whichever run actually paid it, or cancel it if it's a duplicate.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Code</th><th>Name</th><th>Amount</th><th>Reason</th><th>Status</th><th>Applied To</th><th></th></tr></thead>
+      <tbody>
+        ${(arrears||[]).map(a=>{
+          const appliedRun = (runs||[]).find(r=>r.id===a.applied_payroll_run_id);
+          return `<tr>
+            <td>${a.employees.emp_code}</td><td>${a.employees.full_name}</td>
+            <td>₹${Number(a.amount).toLocaleString('en-IN')}</td><td>${a.reason}</td>
+            <td><span class="badge badge-${a.status==='applied'?'active':a.status==='cancelled'?'terminated':'inactive'}">${a.status}</span></td>
+            <td>${appliedRun ? MONTH_NAMES[appliedRun.month]+' '+appliedRun.year : '—'}</td>
+            <td>
+              ${a.status !== 'applied' ? `<select id="reconcile-run-${a.id}" class="tbl-input" style="width:auto;">
+                <option value="">Mark applied to…</option>
+                ${(runs||[]).map(r=>`<option value="${r.id}">${MONTH_NAMES[r.month]} ${r.year}</option>`).join('')}
+              </select> <button class="btn btn-sm" onclick="reconcileMarkApplied('${a.id}')">Go</button>` : ''}
+              ${a.status !== 'pending' ? `<button class="btn btn-sm btn-danger" onclick="reconcileMarkPending('${a.id}')">Reset to Pending</button>` : ''}
+              ${a.status === 'pending' ? `<button class="btn btn-sm btn-danger" onclick="reconcileCancel('${a.id}')">Cancel</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="7" class="muted">No arrears at all yet.</td></tr>'}
+      </tbody>
+    </table></div>
+  `;
+}
+
+async function reconcileMarkApplied(id){
+  const sel = document.getElementById(`reconcile-run-${id}`);
+  const runId = sel ? sel.value : '';
+  if(!runId){ toast('Pick which run to link it to.', true); return; }
+  const { error } = await sb.from('arrears').update({ status:'applied', applied_payroll_run_id: runId }).eq('id', id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+  toast('Arrear marked applied');
+  loadReconcilePanel();
+  loadPendingArrearsList();
+}
+
+async function reconcileMarkPending(id){
+  if(!confirm('Reset this arrear to pending? It will be included again in the next payroll run you save.')) return;
+  const { error } = await sb.from('arrears').update({ status:'pending', applied_payroll_run_id: null }).eq('id', id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+  toast('Arrear reset to pending');
+  loadReconcilePanel();
+  loadPendingArrearsList();
+}
+
+async function reconcileCancel(id){
+  if(!confirm('Cancel this arrear? It will never be paid out.')) return;
+  const { error } = await sb.from('arrears').update({ status:'cancelled' }).eq('id', id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+  toast('Arrear cancelled');
+  loadReconcilePanel();
+  loadPendingArrearsList();
 }
 
 let LAST_PREVIEW = null;
@@ -1254,11 +1335,25 @@ async function confirmSavePayrollRun(){
   if(slipErr){ toast('Could not save payslips: ' + slipErr.message, true); return; }
 
   const allArrearIds = results.flatMap(r => r.calc.arrearsIds);
+  let arrearErrMsg = '';
   if(allArrearIds.length){
-    await sb.from('arrears').update({ status: 'applied', applied_payroll_run_id: run.id }).in('id', allArrearIds);
+    // IMPORTANT: a Postgres/RLS update that matches 0 rows does NOT return an
+    // error — it just silently updates nothing. That's almost certainly why
+    // an arrear can reappear at the same amount every month: this call
+    // "succeeded" but never actually flipped the row to 'applied'. So we
+    // verify the returned row count, not just the absence of an error.
+    const { data: updatedArrears, error: arrearErr } = await sb.from('arrears')
+      .update({ status: 'applied', applied_payroll_run_id: run.id })
+      .in('id', allArrearIds)
+      .select('id');
+    const updatedCount = updatedArrears ? updatedArrears.length : 0;
+    if(arrearErr || updatedCount !== allArrearIds.length){
+      const failedCount = allArrearIds.length - updatedCount;
+      arrearErrMsg = ` — WARNING: ${failedCount} of ${allArrearIds.length} arrear(s) could not be marked applied (${arrearErr ? arrearErr.message : 'permission or match issue'}) and will reappear next run. Use "Reconcile Arrears" on the Payroll Run page to fix.`;
+    }
   }
 
-  toast(`Payroll run saved as draft (${payslipRows.length} payslips)` + (allArrearIds.length ? `, ${allArrearIds.length} arrear(s) applied` : ''));
+  toast(`Payroll run saved as draft (${payslipRows.length} payslips)` + (allArrearIds.length && !arrearErrMsg ? `, ${allArrearIds.length} arrear(s) applied` : arrearErrMsg), !!arrearErrMsg);
   switchView('payslips');
   setTimeout(()=>loadRunIntoPayslips(run.id), 100);
 }
@@ -1276,6 +1371,7 @@ async function renderPayslips(){
         ${(runs||[]).map(r=>`<option value="${r.id}">${MONTH_NAMES[r.month]} ${r.year} — ${r.status}</option>`).join('')}
       </select>
       <button class="btn" id="finalize-btn" style="display:none;" onclick="finalizeRun()">Finalize Run</button>
+      <button class="btn btn-danger" id="reopen-btn" style="display:none;" onclick="reopenRun()">Reopen for Editing</button>
       <button class="btn" onclick="exportRunCSV()" id="export-run-btn" style="display:none;">Export CSV</button>
     </div>
     <div class="card"><div id="payslip-run-table"><p class="muted">Choose a payroll run above.</p></div></div>
@@ -1294,6 +1390,7 @@ async function loadRunIntoPayslips(runId){
   CURRENT_RUN_SLIPS = slips || [];
 
   document.getElementById('finalize-btn').style.display = (run.status==='draft' && can('admin')) ? 'inline-block' : 'none';
+  document.getElementById('reopen-btn').style.display = (run.status==='finalized' && can('admin')) ? 'inline-block' : 'none';
   document.getElementById('export-run-btn').style.display = 'inline-block';
 
   document.getElementById('payslip-run-table').innerHTML = `
@@ -1328,6 +1425,25 @@ async function finalizeRun(){
   });
 
   toast('Payroll run finalized');
+  loadRunIntoPayslips(CURRENT_RUN.id);
+}
+
+async function reopenRun(){
+  if(!CURRENT_RUN) return;
+  const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
+  const ok = confirm(
+    `Reopen ${monthLabel} for editing?\n\n` +
+    `This sets it back to "draft" so you can re-run Payroll Run and Save as Draft again. ` +
+    `Employees may have already seen the old payslip and any "payslip available" notification already sent won't be un-sent. ` +
+    `Any pending arrears for later months are unaffected either way.\n\n` +
+    `Reopen anyway?`
+  );
+  if(!ok) return;
+
+  const { error } = await sb.from('payroll_runs').update({ status:'draft', finalized_at: null }).eq('id', CURRENT_RUN.id);
+  if(error){ toast('Failed: ' + error.message, true); return; }
+
+  toast(`${monthLabel} reopened — go to Payroll Run to recalculate and save.`);
   loadRunIntoPayslips(CURRENT_RUN.id);
 }
 
@@ -1380,16 +1496,26 @@ function viewPayslip(slipId){
    ============================================================================ */
 async function renderReports(){
   const content = document.getElementById('view-content');
-  const { data: runs } = await sb.from('payroll_runs').select('*').order('year',{ascending:false}).order('month',{ascending:false});
+  const now = new Date();
   content.innerHTML = `
     <div class="btn-row">
-      <select id="report-run-select" class="period-select" onchange="loadReportForRun(this.value)">
-        <option value="">Select a payroll run…</option>
-        ${(runs||[]).map(r=>`<option value="${r.id}">${MONTH_NAMES[r.month]} ${r.year} — ${r.status}</option>`).join('')}
-      </select>
+      <select id="report-month" class="period-select">${MONTH_NAMES.slice(1).map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select>
+      <input type="number" id="report-year" class="period-input" style="width:90px" value="${now.getFullYear()}">
+      <button class="btn btn-primary" onclick="loadReportForMonthYear()">Load Report</button>
     </div>
     <div id="report-content"></div>
   `;
+}
+
+async function loadReportForMonthYear(){
+  const month = parseInt(document.getElementById('report-month').value);
+  const year = parseInt(document.getElementById('report-year').value);
+  const { data: run } = await sb.from('payroll_runs').select('id').eq('month', month).eq('year', year).maybeSingle();
+  if(!run){
+    document.getElementById('report-content').innerHTML = `<div class="card muted">No payroll run exists for ${MONTH_NAMES[month]} ${year} yet.</div>`;
+    return;
+  }
+  loadReportForRun(run.id);
 }
 
 async function loadReportForRun(runId){
@@ -1958,11 +2084,22 @@ function renderMissingDaysList(missing){
     <div class="btn-row" style="margin-bottom:6px;">
       <button class="btn btn-sm" onclick="toggleAllBackfillChecks(true)">Select All</button>
       <button class="btn btn-sm" onclick="toggleAllBackfillChecks(false)">Clear</button>
+      <button class="btn btn-sm" onclick="setAllBackfillDayType('full')">Set All Full Day</button>
+      <button class="btn btn-sm" onclick="setAllBackfillDayType('half')">Set All Half Day</button>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr><th></th><th>Date</th></tr></thead>
+      <thead><tr><th></th><th>Date</th><th>Day Type</th></tr></thead>
       <tbody>
-        ${missing.map(d=>`<tr><td><input type="checkbox" class="backfill-check" value="${d}" checked></td><td>${new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short', day:'2-digit', month:'short', year:'numeric'})}</td></tr>`).join('')}
+        ${missing.map(d=>`<tr data-date="${d}">
+          <td><input type="checkbox" class="backfill-check" value="${d}" checked></td>
+          <td>${new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short', day:'2-digit', month:'short', year:'numeric'})}</td>
+          <td>
+            <select class="backfill-day-type tbl-input" style="width:auto;">
+              <option value="full">Full Day</option>
+              <option value="half">Half Day</option>
+            </select>
+          </td>
+        </tr>`).join('')}
       </tbody>
     </table></div>
     <div class="form-row" style="margin-top:10px;max-width:400px;"><label>Reason (applies to all selected days)</label><input id="backfill-reason-bulk" placeholder="e.g. Forgot to check in"></div>
@@ -1974,29 +2111,39 @@ function toggleAllBackfillChecks(checked){
   document.querySelectorAll('.backfill-check').forEach(cb=>cb.checked=checked);
 }
 
+function setAllBackfillDayType(type){
+  document.querySelectorAll('.backfill-day-type').forEach(sel=>sel.value=type);
+}
+
 async function submitBulkBackfillRequest(){
-  const dates = [...document.querySelectorAll('.backfill-check:checked')].map(cb=>cb.value);
   const reason = document.getElementById('backfill-reason-bulk').value.trim();
-  if(!dates.length){ toast('Select at least one day.', true); return; }
+  const rows = [...document.querySelectorAll('#backfill-missing-list tr[data-date]')]
+    .filter(row => row.querySelector('.backfill-check').checked)
+    .map(row => ({ date: row.dataset.date, dayType: row.querySelector('.backfill-day-type').value }));
+
+  if(!rows.length){ toast('Select at least one day.', true); return; }
   if(!reason){ toast('Add a short reason for the missed punches.', true); return; }
 
-  const rows = dates.map(date=>{
+  const payloadRows = rows.map(({date, dayType})=>{
     const nominalTime = new Date(date + 'T12:00:00').toISOString();
     return {
       employee_id: MY_EMPLOYEE.id,
       date,
+      // Half Day = only the morning session is credited (matches the same
+      // half-day = 0.5 day logic used everywhere else in the app); Full Day
+      // credits both sessions.
       morning_marked_at: nominalTime,
-      afternoon_marked_at: nominalTime,
+      afternoon_marked_at: dayType === 'full' ? nominalTime : null,
       morning_lat: null, morning_lng: null, afternoon_lat: null, afternoon_lng: null,
       is_backfill: true,
       backfill_status: 'pending',
-      backfill_reason: reason
+      backfill_reason: reason + (dayType === 'half' ? ' (Half Day)' : '')
     };
   });
 
-  const { error } = await sb.from('daily_attendance').upsert(rows, { onConflict: 'employee_id,date' });
+  const { error } = await sb.from('daily_attendance').upsert(payloadRows, { onConflict: 'employee_id,date' });
   if(error){ toast('Could not submit requests: ' + error.message, true); return; }
-  toast(`Submitted ${rows.length} backfill request${rows.length>1?'s':''} for admin approval`);
+  toast(`Submitted ${payloadRows.length} backfill request${payloadRows.length>1?'s':''} for admin approval`);
   document.getElementById('backfill-missing-list').innerHTML = '';
   loadMyBackfillHistory();
 }
@@ -2145,17 +2292,18 @@ async function saveLeaveEntitlements(){
   await saveSettingKey('leave_entitlements', entitlements);
 }
 
-// Balance = (per-employee override in leave_balances, else the Settings default) minus approved days used this year
-async function getLeaveBalance(employeeId, leaveType, year){
+// Balance = (per-employee override in leave_balances, else the Settings default) minus approved days used this Financial Year (June-May)
+async function getLeaveBalance(employeeId, leaveType, fyYear){
   if(leaveType === 'LWP') return { allocated: null, used: null, balance: null }; // unlimited, no balance tracked
 
   const defaultAllocated = (SETTINGS.leave_entitlements && SETTINGS.leave_entitlements[leaveType]) ?? 0;
-  const { data: overrideRow } = await sb.from('leave_balances').select('*').eq('employee_id', employeeId).eq('leave_type', leaveType).eq('year', year).maybeSingle();
+  const { data: overrideRow } = await sb.from('leave_balances').select('*').eq('employee_id', employeeId).eq('leave_type', leaveType).eq('year', fyYear).maybeSingle();
   const allocated = overrideRow ? Number(overrideRow.allocated) : defaultAllocated;
 
+  const { start, end } = fyDateRange(fyYear);
   const { data: used } = await sb.from('leave_requests').select('days')
     .eq('employee_id', employeeId).eq('leave_type', leaveType).eq('status','approved')
-    .gte('from_date', `${year}-01-01`).lte('to_date', `${year}-12-31`);
+    .gte('from_date', start).lte('to_date', end);
   const usedDays = (used||[]).reduce((s,r)=>s+Number(r.days),0);
 
   return { allocated, used: usedDays, balance: round2(allocated - usedDays) };
@@ -2166,8 +2314,7 @@ async function renderMyLeave(){
   const content = document.getElementById('view-content');
   if(!MY_EMPLOYEE){ content.innerHTML = '<div class="card muted">Your login is not linked to an employee record yet.</div>'; return; }
   content.innerHTML = '<p class="muted">Loading…</p>';
-  const year = new Date().getFullYear();
-
+  const year = currentFYStartYear();
   const balances = await Promise.all(LEAVE_TYPES.filter(t=>t!=='LWP').map(async t => ({ type:t, ...(await getLeaveBalance(MY_EMPLOYEE.id, t, year)) })));
 
   content.innerHTML = `
@@ -2189,7 +2336,7 @@ async function renderMyLeave(){
     </div>
 
     <div class="card">
-      <div class="section-title">Leave Balance (${year})</div>
+      <div class="section-title">Leave Balance (${fyLabel(year)})</div>
       <div class="grid-kpi">
         ${balances.map(b=>`<div class="kpi"><div class="label">${leaveTypeLabel(b.type)}</div><div class="value">${b.balance} / ${b.allocated}</div></div>`).join('')}
       </div>
@@ -2285,7 +2432,7 @@ async function renderLeaveRequests(){
     </div>
 
     <div class="card">
-      <div class="section-title">Leave Balances — ${new Date().getFullYear()}</div>
+      <div class="section-title">Leave Balances — ${fyLabel(currentFYStartYear())}</div>
       <div class="table-wrap"><table>
         <thead><tr><th>Code</th><th>Name</th>${LEAVE_TYPES.filter(t=>t!=='LWP').map(t=>`<th>${leaveTypeLabel(t)}</th>`).join('')}</tr></thead>
         <tbody id="leave-balance-table"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
@@ -2294,7 +2441,7 @@ async function renderLeaveRequests(){
     </div>
   `;
 
-  const year = new Date().getFullYear();
+  const year = currentFYStartYear();
   const activeEmployees = employees.filter(e=>e.status==='active');
   const rowsHtml = await Promise.all(activeEmployees.map(async e=>{
     const balances = await Promise.all(LEAVE_TYPES.filter(t=>t!=='LWP').map(t=>getLeaveBalance(e.id, t, year)));
@@ -2397,20 +2544,24 @@ async function createArrearForBackfill(employeeId, dateStr){
   const { data: slip } = await sb.from('payslips').select('breakdown').eq('payroll_run_id', run.id).eq('employee_id', employeeId).maybeSingle();
   if(!slip || !slip.breakdown || !slip.breakdown.totalDays) return null;
 
+  const { data: dayRow } = await sb.from('daily_attendance').select('morning_marked_at,afternoon_marked_at').eq('employee_id', employeeId).eq('date', dateStr).maybeSingle();
+  const dayValue = (dayRow && dayRow.morning_marked_at && !dayRow.afternoon_marked_at) ? 0.5 : 1; // half day = only one session backfilled
+
   const perDiem = round2(Number(slip.breakdown.gross) / Number(slip.breakdown.totalDays));
-  if(!perDiem) return null;
+  const amount = round2(perDiem * dayValue);
+  if(!amount) return null;
 
   const { error } = await sb.from('arrears').insert({
     employee_id: employeeId,
-    amount: perDiem,
-    reason: `Backfilled attendance for ${dateStr} (${MONTH_NAMES[m]} ${y} payroll was already finalized)`,
+    amount,
+    reason: `Backfilled ${dayValue === 0.5 ? 'half-day' : 'full-day'} attendance for ${dateStr} (${MONTH_NAMES[m]} ${y} payroll was already finalized)`,
     source_month: m,
     source_year: y,
     status: 'pending',
     created_by: CURRENT_PROFILE.id
   });
   if(error){ console.error('Arrear creation failed:', error.message); return null; }
-  return perDiem;
+  return amount;
 }
 
 async function decideBackfillRequest(id, status){
@@ -2472,11 +2623,11 @@ async function decideBackfillRequestsBulk(status){
 }
 
 async function editLeaveBalance(employeeId, leaveType, currentAllocated){
-  const val = prompt(`New annual allocation for ${leaveTypeLabel(leaveType)}:`, currentAllocated);
+  const year = currentFYStartYear();
+  const val = prompt(`New allocation for ${leaveTypeLabel(leaveType)} (${fyLabel(year)}):`, currentAllocated);
   if(val === null) return;
   const allocated = parseFloat(val);
   if(isNaN(allocated)){ toast('Enter a valid number.', true); return; }
-  const year = new Date().getFullYear();
   const { error } = await sb.from('leave_balances').upsert({ employee_id: employeeId, leave_type: leaveType, year, allocated }, { onConflict: 'employee_id,leave_type,year' });
   if(error){ toast('Failed: ' + error.message, true); return; }
   toast('Balance updated');
