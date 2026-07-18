@@ -246,8 +246,8 @@
 /* ============================================================================
    CONFIG — fill in your Supabase project details
    ============================================================================ */
-const SUPABASE_URL = 'https://dhvlwjnbyupsdnkzmxrx.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_AxCrCuluaJQw2aVyRWn09w_QLPlCeSM';
+const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -902,26 +902,45 @@ async function loadAttendanceView(){
   const { data: existing } = await sb.from('attendance').select('*').eq('month', month).eq('year', year);
   const attMap = {};
   (existing||[]).forEach(a => attMap[a.employee_id] = a);
-  const tdim = daysInMonth(month, year);
+
+  document.getElementById('attendance-table').innerHTML = '<p class="muted">Loading…</p>';
+
+  // For any employee with no saved snapshot yet for this month, default to
+  // what's actually recorded (self check-ins, approved leave, approved
+  // backfills, holidays) instead of silently assuming full pay. For
+  // employees that DO have a saved snapshot, still compute the current
+  // self-attendance figures so we can flag it if they've since diverged
+  // (e.g. a backfill got approved after this row was saved) — the saved
+  // values stay what's shown/editable, but a warning + one-click refresh
+  // appears instead of silently going stale.
+  const rows = await Promise.all(employees.map(async e => {
+    const saved = attMap[e.id];
+    const summary = await computeMonthlyFromDaily(e.id, month, year);
+    if(saved){
+      const stale = Number(saved.paid_days) !== summary.paidDays || Number(saved.lop_days) !== summary.lopDays;
+      return { e, total: saved.total_days, paid: saved.paid_days, lop: saved.lop_days, remarks: saved.remarks || '', stale, computed: summary };
+    }
+    return {
+      e, total: summary.totalDays, paid: summary.paidDays, lop: summary.lopDays,
+      remarks: summary.absentEquivalent > 0 ? `Unplanned absent: ${summary.absentEquivalent} day(s) (not yet saved)` : '',
+      stale: false, computed: summary
+    };
+  }));
 
   document.getElementById('attendance-table').innerHTML = `
     <table>
-      <thead><tr><th>Code</th><th>Name</th><th>Total Days</th><th>Paid Days</th><th>LOP Days</th><th>Remarks</th></tr></thead>
+      <thead><tr><th>Code</th><th>Name</th><th>Total Days</th><th>Paid Days</th><th>LOP Days</th><th>Remarks</th><th></th></tr></thead>
       <tbody>
-        ${employees.map(e=>{
-          const a = attMap[e.id];
-          const total = a?.total_days ?? tdim;
-          const paid = a?.paid_days ?? tdim;
-          const lop = a?.lop_days ?? 0;
-          return `<tr data-emp="${e.id}">
+        ${rows.map(({e, total, paid, lop, remarks, stale, computed})=>`
+          <tr data-emp="${e.id}" data-computed-total="${computed.totalDays}" data-computed-paid="${computed.paidDays}" data-computed-lop="${computed.lopDays}">
             <td>${e.emp_code}</td>
             <td>${e.full_name}</td>
             <td><input class="tbl-input att-total" type="number" value="${total}"></td>
             <td><input class="tbl-input att-paid" type="number" step="0.5" value="${paid}" onchange="syncLOP(this)"></td>
             <td><input class="tbl-input att-lop" type="number" step="0.5" value="${lop}" onchange="syncPaid(this)"></td>
-            <td><input class="tbl-input att-remarks" style="width:120px" value="${a?.remarks||''}"></td>
-          </tr>`;
-        }).join('') || '<tr><td colspan="6" class="muted">No active employees.</td></tr>'}
+            <td><input class="tbl-input att-remarks" style="width:160px" value="${remarks}"></td>
+            <td>${stale ? `<button class="btn btn-sm" title="Self-attendance now shows Paid ${computed.paidDays} / LOP ${computed.lopDays} — click to pull that in" onclick="refreshAttendanceRow(this)">⚠ Refresh</button>` : ''}</td>
+          </tr>`).join('') || '<tr><td colspan="7" class="muted">No active employees.</td></tr>'}
       </tbody>
     </table>
   `;
@@ -938,6 +957,15 @@ function syncPaid(el){
   const total = parseFloat(row.querySelector('.att-total').value)||0;
   const lop = parseFloat(el.value)||0;
   row.querySelector('.att-paid').value = Math.max(0, total - lop);
+}
+
+function refreshAttendanceRow(btn){
+  const row = btn.closest('tr');
+  row.querySelector('.att-total').value = row.dataset.computedTotal;
+  row.querySelector('.att-paid').value = row.dataset.computedPaid;
+  row.querySelector('.att-lop').value = row.dataset.computedLop;
+  btn.closest('td').innerHTML = '';
+  toast('Row refreshed from self-attendance — remember to Save Attendance.');
 }
 function markAllFullPay(){
   document.querySelectorAll('#attendance-table tr[data-emp]').forEach(row=>{
@@ -1084,6 +1112,26 @@ async function renderPayroll(){
     <div class="card"><div id="payroll-preview">
       <p class="muted">Select a month and click "Preview / Run Payroll" to calculate salaries based on saved attendance.</p>
     </div></div>
+    <div class="card">
+      <div class="section-title">Pending Arrears Queue</div>
+      <p class="muted">These will be pulled into whichever month you next preview and save — not necessarily the month shown above.</p>
+      <div id="pending-arrears-list"><p class="muted">Loading…</p></div>
+    </div>
+  `;
+  loadPendingArrearsList();
+}
+
+async function loadPendingArrearsList(){
+  const { data: arrears } = await sb.from('arrears').select('*, employees(emp_code, full_name)').eq('status','pending').order('created_at',{ascending:false});
+  const el = document.getElementById('pending-arrears-list');
+  if(!el) return;
+  el.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Code</th><th>Name</th><th>Amount</th><th>Reason</th><th>Queued</th></tr></thead>
+      <tbody>
+        ${(arrears||[]).map(a=>`<tr><td>${a.employees.emp_code}</td><td>${a.employees.full_name}</td><td>₹${Number(a.amount).toLocaleString('en-IN')}</td><td>${a.reason}</td><td>${new Date(a.created_at).toLocaleDateString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No pending arrears.</td></tr>'}
+      </tbody>
+    </table></div>
   `;
 }
 
@@ -1102,9 +1150,19 @@ async function runPayrollPreview(){
     (arrearsByEmployee[a.employee_id] = arrearsByEmployee[a.employee_id] || []).push(a);
   });
 
-  const results = employees.map(e => {
-    const att = attMap[e.id] || { total_days: daysInMonth(month,year), paid_days: daysInMonth(month,year), lop_days: 0, month };
+  const results = await Promise.all(employees.map(async e => {
+    let att = attMap[e.id];
+    let unsynced = false;
+    if(!att){
+      // No admin-saved snapshot for this month — don't silently assume full
+      // pay; compute live from self-attendance (check-ins, approved leave,
+      // approved backfills, holidays) the same way the Attendance tab does.
+      const summary = await computeMonthlyFromDaily(e.id, month, year);
+      att = { total_days: summary.totalDays, paid_days: summary.paidDays, lop_days: summary.lopDays, month };
+      unsynced = true;
+    }
     const calc = computePayslip(e, att);
+    calc.unsynced = unsynced;
     const empArrears = arrearsByEmployee[e.id] || [];
     const arrearsAmount = round2(empArrears.reduce((s,a)=>s+Number(a.amount),0));
     calc.arrearsAmount = arrearsAmount;
@@ -1115,7 +1173,7 @@ async function runPayrollPreview(){
     calc.breakdown.arrearsReasons = calc.arrearsReasons;
     calc.breakdown.netPay = calc.netPay;
     return { employee: e, calc };
-  });
+  }));
 
   LAST_PREVIEW = { month, year, results };
 
@@ -1163,6 +1221,11 @@ async function confirmSavePayrollRun(){
 
   let { data: run, error: runErr } = await sb.from('payroll_runs')
     .select('*').eq('month', month).eq('year', year).maybeSingle();
+
+  if(run && run.status === 'finalized'){
+    toast(`${MONTH_NAMES[month]} ${year} is already finalized and can't be overwritten. Any pending arrears for this employee will be picked up the next time you run a later month's payroll.`, true);
+    return;
+  }
 
   if(!run){
     ({ data: run, error: runErr } = await sb.from('payroll_runs')
