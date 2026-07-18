@@ -117,6 +117,51 @@ Campus Stock, to avoid the branch-deploy file-conflict issue you hit before.
   payroll run (see below). The historical payslip itself is never
   automatically rewritten.
 
+## Follow-up fixes (this update)
+
+- **Finalized runs are now locked from silent overwrite.** Previously,
+  clicking "Save as Draft" would upsert over a run even if it was already
+  finalized — so re-previewing a finalized month and saving again could
+  silently do nothing useful (or worse, look like it worked). Now saving
+  is blocked with a clear message if the selected month is finalized —
+  arrears for that employee will instead be picked up the next time you
+  run a **later** month.
+- **Pending Arrears Queue** now shows on the Payroll Run page at all times
+  — who's owed what and why, before you even pick a month — so there's no
+  more guessing about whether an arrear was actually created or which
+  month it'll land in.
+- **Attendance grid no longer silently goes stale.** Previously, once a
+  month's attendance was saved, the grid always showed those saved values
+  even if self-attendance changed afterward (e.g. a backfill approved
+  later) — you had to remember to click "Sync from Self-Attendance" to
+  notice. Now each row is checked against current self-attendance on load;
+  if they've diverged, a **⚠ Refresh** button appears on that row showing
+  what the new numbers would be. It only refreshes that one row when
+  clicked — nothing is overwritten automatically, so any manual admin
+  edits you made are never silently discarded.
+
+## Do the .sql files need to go in the GitHub repo?
+
+No — GitHub Pages only serves static files to the browser (`index.html`,
+`manifest.json`); it never executes `.sql` files, so they're not required
+for the app to run. Every `schema*.sql` file is meant to be run **once,
+manually, in Supabase's SQL Editor** — never automatically. That said, it's
+good practice to keep them committed in the repo anyway, purely as a
+version history of your database schema (so anyone can see what changed
+and when) — just don't expect uploading them to *do* anything on their own.
+
+## Where arrears actually land — a timing note
+
+An arrear queued today is picked up by whichever payroll month you next
+**preview and save**, not necessarily the very next calendar month. If
+that next month happens to already be finalized by the time you approve
+the backfill, the arrear rolls forward again to the month after that. The
+Pending Arrears Queue (above) is the reliable way to check whether an
+arrear was actually created and is still waiting — if a payroll month
+"isn't showing more," check there first, and also confirm this file and
+`schema_update_phase2c.sql` are actually the versions currently deployed
+and run in Supabase.
+
 ## Backfill → Arrears (automatic)
 
 Approving an attendance backfill for a date whose payroll month is already
