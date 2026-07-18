@@ -1062,7 +1062,8 @@ function calcPT(earnedGross, month){
   return amount;
 }
 
-function computePayslip(employee, attendance){
+function computePayslip(employee, attendance, arrearsAmount){
+  arrearsAmount = Number(arrearsAmount) || 0;
   const basic = Number(employee.basic)||0;
   const hra = Number(employee.hra)||0;
   const allowances = sumAllowances(employee.allowances);
@@ -1080,24 +1081,35 @@ function computePayslip(employee, attendance){
 
   let pfEmployee = 0, pfEmployer = 0;
   if(employee.pf_applicable){
+    // PF stays on earned Basic only — arrears here are a lump gross top-up
+    // with no basic/HRA split of their own, so there's nothing meaningful
+    // to run PF on. (If you later want PF on arrears too, arrears would
+    // need their own basic/allowance breakdown at creation time.)
     const pfWage = Math.min(earnedBasic, pfCfg.wage_ceiling);
     pfEmployee = round2(pfWage * pfCfg.employee_rate / 100);
     pfEmployer = round2(pfWage * pfCfg.employer_rate / 100);
   }
 
+  // ESI is contribution-linked to actual wages PAID this cycle. Arrears paid
+  // out in this run are real wages this month, so they belong in the ESI
+  // wage base — both for the ceiling-eligibility check and the contribution
+  // itself. (Professional Tax intentionally stays on earnedGross alone —
+  // AP PT slabs are keyed to the regular monthly salary bracket, not a
+  // one-off catch-up payment; revisit if your state's rule differs.)
+  const esiWageBase = round2(earnedGross + arrearsAmount);
   let esiEmployee = 0, esiEmployer = 0;
-  if(employee.esi_applicable && earnedGross <= esiCfg.wage_ceiling){
-    esiEmployee = round2(earnedGross * esiCfg.employee_rate / 100);
-    esiEmployer = round2(earnedGross * esiCfg.employer_rate / 100);
+  if(employee.esi_applicable && esiWageBase <= esiCfg.wage_ceiling){
+    esiEmployee = round2(esiWageBase * esiCfg.employee_rate / 100);
+    esiEmployer = round2(esiWageBase * esiCfg.employer_rate / 100);
   }
 
   const pt = calcPT(earnedGross, attendanceMonthOf(attendance));
-  const netPay = round2(earnedGross - pfEmployee - esiEmployee - pt);
+  const netPay = round2(earnedGross + arrearsAmount - pfEmployee - esiEmployee - pt);
 
   return {
     gross, earnedGross, earnedBasic, paidDays, totalDays,
-    pfEmployee, pfEmployer, esiEmployee, esiEmployer, pt, netPay,
-    breakdown: { basic, hra, allowances, gross, earnedGross, paidDays, totalDays, pfEmployee, pfEmployer, esiEmployee, esiEmployer, pt, netPay }
+    pfEmployee, pfEmployer, esiEmployee, esiEmployer, esiWageBase, pt, netPay,
+    breakdown: { basic, hra, allowances, gross, earnedGross, paidDays, totalDays, pfEmployee, pfEmployer, esiEmployee, esiEmployer, esiWageBase, pt, netPay }
   };
 }
 
@@ -1242,17 +1254,15 @@ async function runPayrollPreview(){
       att = { total_days: summary.totalDays, paid_days: summary.paidDays, lop_days: summary.lopDays, month };
       unsynced = true;
     }
-    const calc = computePayslip(e, att);
-    calc.unsynced = unsynced;
     const empArrears = arrearsByEmployee[e.id] || [];
     const arrearsAmount = round2(empArrears.reduce((s,a)=>s+Number(a.amount),0));
+    const calc = computePayslip(e, att, arrearsAmount);
+    calc.unsynced = unsynced;
     calc.arrearsAmount = arrearsAmount;
     calc.arrearsIds = empArrears.map(a=>a.id);
     calc.arrearsReasons = empArrears.map(a=>a.reason);
-    calc.netPay = round2(calc.netPay + arrearsAmount);
     calc.breakdown.arrearsAmount = arrearsAmount;
     calc.breakdown.arrearsReasons = calc.arrearsReasons;
-    calc.breakdown.netPay = calc.netPay;
     return { employee: e, calc };
   }));
 
@@ -2490,6 +2500,7 @@ async function renderBackfillRequests(){
       <div class="section-title">Attendance Backfill Requests</div>
       <p class="muted">Employees can request genuinely missed past-day punches be marked, without the usual location check — often submitted in a batch covering several days. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
       <p class="muted">⚠ If a request's date falls in a month whose payroll is already <strong>finalized</strong>, the original payslip itself is never rewritten. Instead, approving it automatically queues an <strong>arrear</strong> (one day's pay, at that month's rate) which gets pulled into the employee's next payroll run.</p>
+      ${can('admin','accountant') ? `<button class="btn btn-sm" style="margin-bottom:10px;" onclick="scanForMissedArrears()">Scan for Missed Arrears (fix historical gaps)</button>` : ''}
       ${pendingCount && can('admin','accountant') ? `
         <div class="btn-row" style="margin-bottom:8px;">
           <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(true)">Select All Pending</button>
@@ -2536,18 +2547,29 @@ function finalizedMonthWarning(dateStr, status){
   return `Heads up: ${MONTH_NAMES[m]} ${y}'s payroll is already finalized, so that payslip itself won't change. Approving will queue an arrear (one day's pay at that month's rate) to be added to this employee's next payroll run automatically.\n\nApprove anyway?`;
 }
 
-// Looks up the employee's finalized payslip for a given month/year to derive a fair per-day rate
+// Looks up the employee's finalized payslip for a given month/year to derive a fair per-day rate.
+// Uses the payslips.gross COLUMN directly (always present) rather than the
+// breakdown jsonb blob — payslips created by an older version of this app
+// may not have every field inside breakdown, and silently skipping arrear
+// creation because of that is exactly the kind of gap that leaves a real
+// day's pay stuck with no record anywhere. daysInMonth() is used for the
+// day count instead of a stored totalDays for the same reason.
 async function createArrearForBackfill(employeeId, dateStr){
   const [y, m] = dateStr.split('-').map(Number);
   const { data: run } = await sb.from('payroll_runs').select('id').eq('month', m).eq('year', y).eq('status','finalized').maybeSingle();
   if(!run) return null;
-  const { data: slip } = await sb.from('payslips').select('breakdown').eq('payroll_run_id', run.id).eq('employee_id', employeeId).maybeSingle();
-  if(!slip || !slip.breakdown || !slip.breakdown.totalDays) return null;
+  const { data: slip } = await sb.from('payslips').select('gross').eq('payroll_run_id', run.id).eq('employee_id', employeeId).maybeSingle();
+  if(!slip || !slip.gross) return null;
+
+  // Don't create a duplicate if one already exists for this exact employee+date
+  // (e.g. a decision got retried, or this is being run via the reconciliation scan)
+  const { data: existing } = await sb.from('arrears').select('id').eq('employee_id', employeeId).eq('source_date', dateStr).maybeSingle();
+  if(existing) return null;
 
   const { data: dayRow } = await sb.from('daily_attendance').select('morning_marked_at,afternoon_marked_at').eq('employee_id', employeeId).eq('date', dateStr).maybeSingle();
   const dayValue = (dayRow && dayRow.morning_marked_at && !dayRow.afternoon_marked_at) ? 0.5 : 1; // half day = only one session backfilled
 
-  const perDiem = round2(Number(slip.breakdown.gross) / Number(slip.breakdown.totalDays));
+  const perDiem = round2(Number(slip.gross) / daysInMonth(m, y));
   const amount = round2(perDiem * dayValue);
   if(!amount) return null;
 
@@ -2557,11 +2579,40 @@ async function createArrearForBackfill(employeeId, dateStr){
     reason: `Backfilled ${dayValue === 0.5 ? 'half-day' : 'full-day'} attendance for ${dateStr} (${MONTH_NAMES[m]} ${y} payroll was already finalized)`,
     source_month: m,
     source_year: y,
+    source_date: dateStr,
     status: 'pending',
     created_by: CURRENT_PROFILE.id
   });
   if(error){ console.error('Arrear creation failed:', error.message); return null; }
   return amount;
+}
+
+// Reconciliation: find every APPROVED backfill whose date falls in an
+// already-finalized month but which has no arrear on file at all — covers
+// gaps left before this fix (e.g. approvals that happened while the run was
+// still draft, or where an older payslip's breakdown was missing a field
+// createArrearForBackfill used to depend on) — and creates the missing
+// arrear for each. Safe to run repeatedly: createArrearForBackfill itself
+// skips any employee+date that already has an arrear on file.
+async function scanForMissedArrears(){
+  if(!confirm('Scan every approved backfill in an already-finalized month for a missing arrear, and create any that are missing? This is safe to run more than once.')) return;
+  const { data: approved } = await sb.from('daily_attendance')
+    .select('employee_id, date, employees(emp_code, full_name)')
+    .eq('is_backfill', true).eq('backfill_status', 'approved');
+  const { data: finalizedRuns } = await sb.from('payroll_runs').select('month,year').eq('status','finalized');
+  const finalizedSet = new Set((finalizedRuns||[]).map(r => `${r.year}-${r.month}`));
+
+  let created = 0, checked = 0;
+  for(const row of (approved||[])){
+    const [y,m] = row.date.split('-').map(Number);
+    if(!finalizedSet.has(`${y}-${m}`)) continue;
+    checked++;
+    const amount = await createArrearForBackfill(row.employee_id, row.date);
+    if(amount) created++;
+  }
+  toast(`Checked ${checked} approved backfill(s) in finalized months — ${created} missing arrear(s) created.`, false);
+  loadPendingArrearsList();
+  renderBackfillRequests();
 }
 
 async function decideBackfillRequest(id, status){
