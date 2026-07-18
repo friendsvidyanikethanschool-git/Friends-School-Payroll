@@ -162,6 +162,41 @@ arrear was actually created and is still waiting — if a payroll month
 `schema_update_phase2c.sql` are actually the versions currently deployed
 and run in Supabase.
 
+## This update
+
+- **Reopening a finalized payroll run** was already built (you may not have
+  noticed it): on the Payslips page, a finalized run shows a **"Reopen for
+  Editing"** button (admin only) that sets it back to draft so you can
+  re-run Payroll Run and save again.
+- **Reconcile Arrears** tool (was referenced in a warning message but not
+  actually built until now — fixed): on the Payroll Run page, click
+  "Reconcile Arrears" to see every arrear ever created, whatever its
+  status, and manually mark one applied/pending/cancelled. This is the fix
+  for an arrear reappearing at the same amount every month.
+- **Found the likely cause of the repeating arrear**: Postgres/Supabase
+  doesn't return an error when an UPDATE matches zero rows (e.g. blocked by
+  a permissions policy) — it just silently updates nothing. So the
+  "mark this arrear as applied" step could fail invisibly, leaving the
+  arrear "pending" forever and getting re-added to every subsequent
+  month's payroll. The save flow now checks the actual number of rows
+  updated (not just "was there an error"), and warns loudly if it doesn't
+  match — pointing you at Reconcile Arrears to fix it by hand.
+- **Reports now has separate Month + Year selectors** (matching Payroll
+  Run), instead of one combined "pick a run" dropdown.
+- **Financial Year is now June–May**, not calendar year. Leave balances,
+  entitlements, and the admin balance editor all key off FY (e.g. "FY
+  2026-27" = June 2026 through May 2027) instead of Jan–Dec.
+- **Backfill requests now support Half Day / Full Day** per date, in the
+  same tabular missing-days form — Half Day credits one session (0.5 day,
+  matching how half-days work everywhere else in the app); Full Day
+  credits both. Arrears calculated from a half-day backfill are correctly
+  half the per-diem rate.
+- **`reset_test_data.sql`** — an optional, clearly-marked-destructive
+  script to wipe all attendance/leave/payroll/payslip/arrears/notification
+  data while keeping employees and settings intact, so you can test the
+  whole flow from a clean slate. Doesn't touch employees or their logins
+  unless you deliberately uncomment the extra section at the bottom.
+
 ## Backfill → Arrears (automatic)
 
 Approving an attendance backfill for a date whose payroll month is already
