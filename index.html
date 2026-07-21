@@ -156,6 +156,69 @@
   .kv span:first-child{color:var(--ink-soft);}
   .kv span:last-child{font-weight:600;}
   .hidden{display:none !important;}
+
+  /* ---------- Employee Master view ---------- */
+  .view-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px;flex-wrap:wrap;}
+  .view-actions{display:flex;gap:10px;flex-wrap:wrap;}
+  .filter-row{display:flex;gap:10px;margin-bottom:16px;}
+  .filter-row input{max-width:280px;}
+  .filter-row select{max-width:180px;}
+  .table-wrap{background:var(--paper-raised);border:1px solid var(--rule);border-radius:var(--radius);overflow-x:auto;}
+  .emp-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  .emp-table th{
+    text-align:left;padding:11px 14px;background:#F1EEE5;color:var(--ink-soft);
+    font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-family:'IBM Plex Mono',monospace;
+    border-bottom:1px solid var(--rule);white-space:nowrap;
+  }
+  .emp-table td{padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:middle;}
+  .emp-table tr:last-child td{border-bottom:none;}
+  .emp-table tr:hover td{background:#FBFAF6;}
+  .status-pill{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+    padding:3px 8px;border-radius:100px;
+  }
+  .status-active{background:var(--green-soft);color:var(--green);}
+  .status-inactive{background:var(--rule);color:var(--ink-soft);}
+  .status-left,.status-terminated{background:var(--red-soft);color:var(--red);}
+  .row-action-btn{background:none;border:none;color:var(--gold);font-weight:600;font-size:12.5px;cursor:pointer;padding:0;margin-right:10px;}
+  .row-action-btn:last-child{margin-right:0;}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(28,43,51,0.45);
+    display:flex;align-items:center;justify-content:center;z-index:100;padding:24px;
+  }
+  .modal{
+    background:var(--paper-raised);border-radius:var(--radius);width:100%;max-width:720px;
+    max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.2);
+  }
+  .modal-header{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:20px 26px;border-bottom:1px solid var(--rule);
+  }
+  .modal-header h2{margin:0;}
+  .modal-close{background:none;border:none;font-size:26px;line-height:1;color:var(--ink-soft);cursor:pointer;}
+  .modal-body{padding:22px 26px;overflow-y:auto;}
+  .modal-footer{
+    display:flex;justify-content:flex-end;gap:10px;padding:16px 26px;border-top:1px solid var(--rule);
+  }
+  .form-section-title{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--gold);margin:22px 0 10px;
+  }
+  .form-section-title:first-child{margin-top:0;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
+  .form-grid label{margin-top:12px;}
+  .form-grid > div:nth-child(1) label, .form-grid > div:nth-child(2) label{margin-top:0;}
+  .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:16px;}
+  .checkbox-row input{width:auto;}
+  .allowance-row{display:flex;gap:8px;margin-top:8px;align-items:center;}
+  .allowance-row input:first-child{flex:1.3;}
+  .allowance-row input:last-child{flex:1;}
+  .allowance-remove{background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:0 4px;}
+  .import-summary-box{
+    border:1px solid var(--rule);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;font-size:13.5px;
+  }
   .spinner{
     width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
     border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-right:8px;
@@ -257,15 +320,135 @@
     <div class="layout">
       <div class="sidebar" id="sidebar"></div>
       <div class="main">
-        <div class="welcome-panel">
-          <div class="eyebrow">You're all set</div>
-          <h2 id="welcome-heading">Welcome</h2>
-          <p class="subtitle" id="welcome-sub">Your account is linked and ready.</p>
-          <div class="kv"><span>School</span><span id="wk-school">&mdash;</span></div>
-          <div class="kv"><span>Role</span><span id="wk-role">&mdash;</span></div>
-          <div class="kv"><span>Signed in as</span><span id="wk-user">&mdash;</span></div>
-          <div class="kv"><span>Next module</span><span>Employee Master</span></div>
+
+        <div class="view" id="view-dashboard">
+          <div class="welcome-panel">
+            <div class="eyebrow">You're all set</div>
+            <h2 id="welcome-heading">Welcome</h2>
+            <p class="subtitle" id="welcome-sub">Your account is linked and ready.</p>
+            <div class="kv"><span>School</span><span id="wk-school">&mdash;</span></div>
+            <div class="kv"><span>Role</span><span id="wk-role">&mdash;</span></div>
+            <div class="kv"><span>Signed in as</span><span id="wk-user">&mdash;</span></div>
+            <div class="kv"><span>Next module</span><span>Employee Master</span></div>
+          </div>
         </div>
+
+        <div class="view hidden" id="view-employees">
+          <div class="view-header">
+            <div>
+              <h2>Employee Master</h2>
+              <p class="subtitle" style="margin-bottom:0;">Add, edit, and manage every employee on record.</p>
+            </div>
+            <div class="view-actions">
+              <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+              <button class="btn btn-ghost" id="btn-csv-import" style="width:auto;margin:0;">Import CSV</button>
+              <button class="btn btn-ghost" id="btn-csv-export" style="width:auto;margin:0;">Export CSV</button>
+              <button class="btn btn-primary" id="btn-emp-new" style="width:auto;margin:0;">+ Add Employee</button>
+            </div>
+          </div>
+
+          <div class="filter-row">
+            <input type="text" id="emp-search" placeholder="Search by name or employee code...">
+            <select id="emp-status-filter">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="left">Left</option>
+              <option value="terminated">Terminated</option>
+            </select>
+          </div>
+
+          <div id="emp-import-summary"></div>
+
+          <div class="table-wrap">
+            <table class="emp-table">
+              <thead>
+                <tr>
+                  <th>Code</th><th>Name</th><th>Designation</th><th>Department</th>
+                  <th>Status</th><th>Basic</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="emp-table-body"></tbody>
+            </table>
+          </div>
+          <div id="emp-empty-state" class="hidden subtitle" style="text-align:center;padding:40px 0;">No employees yet — add your first one.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= EMPLOYEE ADD/EDIT MODAL ================= -->
+  <div class="modal-overlay hidden" id="emp-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="emp-modal-title">Add Employee</h2>
+        <button class="modal-close" id="emp-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="form-section-title">Employment</div>
+        <div class="form-grid">
+          <div><label>Employee Code</label><input type="text" id="e-emp_code" placeholder="Auto-generated if left blank"></div>
+          <div><label>Full name *</label><input type="text" id="e-full_name"></div>
+          <div><label>Designation</label><input type="text" id="e-designation"></div>
+          <div><label>Department</label><input type="text" id="e-department"></div>
+          <div><label>Date of joining</label><input type="date" id="e-date_of_joining"></div>
+          <div><label>Employment type</label>
+            <select id="e-employment_type"><option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="contract">Contract</option></select>
+          </div>
+          <div><label>Work location</label><input type="text" id="e-work_location"></div>
+          <div><label>Reporting manager</label><select id="e-reporting_manager_id"><option value="">&mdash; None &mdash;</option></select></div>
+          <div><label>Status</label>
+            <select id="e-status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="left">Left</option><option value="terminated">Terminated</option></select>
+          </div>
+          <div id="e-lwd-wrap" class="hidden"><label>Last working day</label><input type="date" id="e-last_working_day"></div>
+        </div>
+
+        <div class="form-section-title">Personal</div>
+        <div class="form-grid">
+          <div><label>Date of birth</label><input type="date" id="e-date_of_birth"></div>
+          <div><label>Gender</label><select id="e-gender"><option value="">&mdash;</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
+          <div><label>Marital status</label><select id="e-marital_status"><option value="">&mdash;</option><option value="single">Single</option><option value="married">Married</option><option value="other">Other</option></select></div>
+          <div><label>Blood group</label><input type="text" id="e-blood_group" placeholder="e.g. O+"></div>
+          <div><label>Phone</label><input type="text" id="e-phone"></div>
+          <div><label>Personal email</label><input type="email" id="e-personal_email"></div>
+          <div><label>Aadhaar number</label><input type="text" id="e-aadhaar_no"></div>
+          <div><label>Emergency contact name</label><input type="text" id="e-emergency_contact_name"></div>
+          <div><label>Emergency contact phone</label><input type="text" id="e-emergency_contact_phone"></div>
+        </div>
+
+        <div class="form-section-title">Statutory</div>
+        <div class="form-grid">
+          <div><label>PAN number</label><input type="text" id="e-pan_no"></div>
+          <div><label>PF number</label><input type="text" id="e-pf_number"></div>
+          <div><label>UAN number</label><input type="text" id="e-uan_no"></div>
+          <div><label>ESI number</label><input type="text" id="e-esi_number"></div>
+          <div class="checkbox-row"><input type="checkbox" id="e-pf_applicable" checked><label for="e-pf_applicable" style="margin:0;">PF applicable</label></div>
+          <div class="checkbox-row"><input type="checkbox" id="e-esi_applicable" checked><label for="e-esi_applicable" style="margin:0;">ESI applicable</label></div>
+        </div>
+
+        <div class="form-section-title">Bank details</div>
+        <div class="form-grid">
+          <div><label>Bank name</label><input type="text" id="e-bank_name"></div>
+          <div><label>Account number</label><input type="text" id="e-bank_account_no"></div>
+          <div><label>IFSC code</label><input type="text" id="e-ifsc_code"></div>
+        </div>
+
+        <div class="form-section-title">Salary structure</div>
+        <div class="form-grid">
+          <div><label>Basic *</label><input type="number" id="e-basic" value="0"></div>
+          <div><label>HRA</label><input type="number" id="e-hra" value="0"></div>
+        </div>
+        <label style="margin-top:16px;">Other named components</label>
+        <div id="allowance-rows"></div>
+        <button class="link-btn" id="btn-add-allowance" style="margin-top:8px;">+ Add component (e.g. Tuition Salary, Special Allowance)</button>
+
+        <div id="emp-form-msg"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="emp-cancel" style="width:auto;margin:0;">Cancel</button>
+        <button class="btn btn-primary" id="btn-emp-save" style="width:auto;margin:0;">Save Employee</button>
       </div>
     </div>
   </div>
@@ -273,7 +456,6 @@
 </div>
 
 <script>
-(function(){
 // ============================================================================
 // CONFIG — fill these in from Supabase → Project Settings → API
 // ============================================================================
@@ -485,8 +667,8 @@ $('btn-onboard-back').addEventListener('click', async ()=>{
 // Dashboard shell
 // ---------------------------------------------------------------------------
 const NAV_ITEMS = [
-  { label: 'Dashboard', active: true },
-  { label: 'Employee Master', soon: true },
+  { label: 'Dashboard', view: 'dashboard' },
+  { label: 'Employee Master', view: 'employees' },
   { label: 'Attendance', soon: true },
   { label: 'Leave', soon: true },
   { label: 'Holiday Calendar', soon: true },
@@ -494,8 +676,10 @@ const NAV_ITEMS = [
   { label: 'Payslips & Reports', soon: true },
   { label: 'Settings', soon: true },
 ];
+let currentUser = null, currentProfile = null;
 
 function renderDashboard(profile, user){
+  currentUser = user; currentProfile = profile;
   const schoolName = profile.schools ? profile.schools.name : 'Your School';
   $('brand-initial').textContent = schoolName.charAt(0).toUpperCase();
   $('brand-school-name').textContent = schoolName;
@@ -507,11 +691,256 @@ function renderDashboard(profile, user){
   $('wk-user').textContent = user.email;
 
   $('sidebar').innerHTML = NAV_ITEMS.map(n =>
-    `<div class="nav-item ${n.active ? 'active' : ''} ${n.soon ? 'soon' : ''}">
+    `<div class="nav-item ${n.view === 'dashboard' ? 'active' : ''} ${n.soon ? 'soon' : ''}" ${n.view ? `data-view="${n.view}"` : ''}>
        ${n.label}${n.soon ? '<span class="soon-tag">soon</span>' : ''}
      </div>`
   ).join('');
+
+  $('sidebar').querySelectorAll('.nav-item[data-view]').forEach(el=>{
+    el.addEventListener('click', ()=> switchView(el.dataset.view));
+  });
 }
+
+function switchView(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+  $(`view-${view}`).classList.remove('hidden');
+  $('sidebar').querySelectorAll('.nav-item[data-view]').forEach(el=>{
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+  if(view === 'employees') loadEmployees();
+}
+
+// ---------------------------------------------------------------------------
+// Employee Master
+// ---------------------------------------------------------------------------
+let allEmployees = [];
+let editingEmployeeId = null;
+
+async function loadEmployees(){
+  const { data, error } = await supabase.from('employees').select('*').order('emp_code');
+  if(error){ console.error(error); return; }
+  allEmployees = data || [];
+  renderEmployeeTable();
+}
+
+function renderEmployeeTable(){
+  const search = $('emp-search').value.trim().toLowerCase();
+  const statusFilter = $('emp-status-filter').value;
+  const rows = allEmployees.filter(e=>{
+    const matchesSearch = !search || e.full_name.toLowerCase().includes(search) || (e.emp_code || '').toLowerCase().includes(search);
+    const matchesStatus = !statusFilter || e.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  $('emp-empty-state').classList.toggle('hidden', allEmployees.length > 0);
+  $('emp-table-body').innerHTML = rows.map(e => `
+    <tr>
+      <td class="mono">${e.emp_code || ''}</td>
+      <td>${e.full_name}</td>
+      <td>${e.designation || '—'}</td>
+      <td>${e.department || '—'}</td>
+      <td><span class="status-pill status-${e.status}">${e.status}</span></td>
+      <td>${Number(e.basic || 0).toLocaleString('en-IN')}</td>
+      <td>
+        <button class="row-action-btn" data-edit="${e.id}">Edit</button>
+      </td>
+    </tr>
+  `).join('');
+
+  $('emp-table-body').querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEmployeeModal(btn.dataset.edit));
+  });
+}
+
+$('emp-search').addEventListener('input', renderEmployeeTable);
+$('emp-status-filter').addEventListener('change', renderEmployeeTable);
+
+// --- Allowance rows (named salary components) ---
+function addAllowanceRow(name = '', amount = ''){
+  const row = document.createElement('div');
+  row.className = 'allowance-row';
+  row.innerHTML = `
+    <input type="text" class="allowance-name" placeholder="Component name (e.g. Tuition Salary)" value="${name.replace(/"/g,'&quot;')}">
+    <input type="number" class="allowance-amount" placeholder="Amount" value="${amount}">
+    <button type="button" class="allowance-remove">&times;</button>
+  `;
+  row.querySelector('.allowance-remove').addEventListener('click', ()=> row.remove());
+  $('allowance-rows').appendChild(row);
+}
+$('btn-add-allowance').addEventListener('click', ()=> addAllowanceRow());
+
+function collectAllowances(){
+  const out = {};
+  $('allowance-rows').querySelectorAll('.allowance-row').forEach(row=>{
+    const name = row.querySelector('.allowance-name').value.trim();
+    const amount = parseFloat(row.querySelector('.allowance-amount').value) || 0;
+    if(name) out[name] = amount;
+  });
+  return out;
+}
+
+// --- Modal open/close ---
+const EMP_FIELDS = [
+  'emp_code','full_name','designation','department','date_of_joining','employment_type','work_location',
+  'reporting_manager_id','status','last_working_day','date_of_birth','gender','marital_status','blood_group',
+  'phone','personal_email','aadhaar_no','emergency_contact_name','emergency_contact_phone','pan_no',
+  'pf_number','uan_no','esi_number','bank_name','bank_account_no','ifsc_code','basic','hra'
+];
+
+function populateManagerDropdown(excludeId){
+  const sel = $('e-reporting_manager_id');
+  sel.innerHTML = '<option value="">&mdash; None &mdash;</option>' + allEmployees
+    .filter(e => e.id !== excludeId)
+    .map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+}
+
+function openEmployeeModal(employeeId){
+  editingEmployeeId = employeeId || null;
+  const emp = employeeId ? allEmployees.find(e => e.id === employeeId) : null;
+
+  $('emp-modal-title').textContent = emp ? `Edit ${emp.full_name}` : 'Add Employee';
+  populateManagerDropdown(employeeId);
+  setMsg($('emp-form-msg'), '', '');
+
+  EMP_FIELDS.forEach(f=>{
+    const el = $('e-' + f);
+    if(!el) return;
+    el.value = emp && emp[f] != null ? emp[f] : (f === 'basic' || f === 'hra' ? 0 : '');
+  });
+  $('e-pf_applicable').checked = emp ? !!emp.pf_applicable : true;
+  $('e-esi_applicable').checked = emp ? !!emp.esi_applicable : true;
+  $('e-employment_type').value = emp?.employment_type || 'full_time';
+
+  $('allowance-rows').innerHTML = '';
+  const allowances = emp?.allowances || {};
+  Object.keys(allowances).forEach(name => addAllowanceRow(name, allowances[name]));
+
+  $('e-lwd-wrap').classList.toggle('hidden', $('e-status').value !== 'left' && $('e-status').value !== 'terminated');
+  show('emp-modal-overlay');
+}
+
+$('e-status').addEventListener('change', ()=>{
+  const needsLwd = $('e-status').value === 'left' || $('e-status').value === 'terminated';
+  $('e-lwd-wrap').classList.toggle('hidden', !needsLwd);
+});
+
+$('btn-emp-new').addEventListener('click', ()=> openEmployeeModal(null));
+$('emp-modal-close').addEventListener('click', ()=> hide('emp-modal-overlay'));
+$('emp-cancel').addEventListener('click', ()=> hide('emp-modal-overlay'));
+
+$('btn-emp-save').addEventListener('click', async ()=>{
+  const fullName = $('e-full_name').value.trim();
+  const basic = parseFloat($('e-basic').value) || 0;
+  if(!fullName){ setMsg($('emp-form-msg'), 'Full name is required.', 'error'); return; }
+
+  const payload = {
+    full_name: fullName,
+    designation: $('e-designation').value.trim() || null,
+    department: $('e-department').value.trim() || null,
+    date_of_joining: $('e-date_of_joining').value || null,
+    employment_type: $('e-employment_type').value,
+    work_location: $('e-work_location').value.trim() || null,
+    reporting_manager_id: $('e-reporting_manager_id').value || null,
+    status: $('e-status').value,
+    last_working_day: $('e-last_working_day').value || null,
+    date_of_birth: $('e-date_of_birth').value || null,
+    gender: $('e-gender').value || null,
+    marital_status: $('e-marital_status').value || null,
+    blood_group: $('e-blood_group').value.trim() || null,
+    phone: $('e-phone').value.trim() || null,
+    personal_email: $('e-personal_email').value.trim() || null,
+    aadhaar_no: $('e-aadhaar_no').value.trim() || null,
+    emergency_contact_name: $('e-emergency_contact_name').value.trim() || null,
+    emergency_contact_phone: $('e-emergency_contact_phone').value.trim() || null,
+    pan_no: $('e-pan_no').value.trim() || null,
+    pf_number: $('e-pf_number').value.trim() || null,
+    uan_no: $('e-uan_no').value.trim() || null,
+    esi_number: $('e-esi_number').value.trim() || null,
+    pf_applicable: $('e-pf_applicable').checked,
+    esi_applicable: $('e-esi_applicable').checked,
+    bank_name: $('e-bank_name').value.trim() || null,
+    bank_account_no: $('e-bank_account_no').value.trim() || null,
+    ifsc_code: $('e-ifsc_code').value.trim() || null,
+    basic: basic,
+    hra: parseFloat($('e-hra').value) || 0,
+    allowances: collectAllowances(),
+  };
+  const empCode = $('e-emp_code').value.trim();
+  if(empCode) payload.emp_code = empCode;
+
+  const btn = $('btn-emp-save');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Saving...';
+  try{
+    let error;
+    if(editingEmployeeId){
+      ({ error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId));
+    } else {
+      ({ error } = await supabase.from('employees').insert(payload));
+    }
+    if(error) throw error;
+    hide('emp-modal-overlay');
+    await loadEmployees();
+  } catch(err){
+    setMsg($('emp-form-msg'), err.message || 'Could not save employee.', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Employee';
+  }
+});
+
+// --- CSV export ---
+$('btn-csv-export').addEventListener('click', ()=>{
+  const headers = ['emp_code','full_name','designation','department','date_of_joining','status','phone','basic','hra'];
+  const rows = allEmployees.map(e => headers.map(h => `"${(e[h] ?? '').toString().replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'employees.csv';
+  a.click();
+});
+
+// --- CSV import (basic fields: full_name required; emp_code optional -> auto) ---
+$('btn-csv-import').addEventListener('click', ()=> $('csv-file-input').click());
+$('csv-file-input').addEventListener('change', async (ev)=>{
+  const file = ev.target.files[0];
+  if(!file) return;
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if(lines.length < 2){ return; }
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const records = lines.slice(1).map(line=>{
+    const cells = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const obj = {};
+    headers.forEach((h,i)=>{ if(cells[i] !== undefined && cells[i] !== '') obj[h] = cells[i]; });
+    return obj;
+  }).filter(r => r.full_name);
+
+  if(records.length === 0){
+    $('emp-import-summary').innerHTML = '<div class="import-summary-box msg error">No valid rows found — make sure the CSV has a full_name column.</div>';
+    return;
+  }
+
+  const payloads = records.map(r => ({
+    emp_code: r.emp_code || undefined,
+    full_name: r.full_name,
+    designation: r.designation || null,
+    department: r.department || null,
+    date_of_joining: r.date_of_joining || null,
+    status: r.status || 'active',
+    phone: r.phone || null,
+    basic: parseFloat(r.basic) || 0,
+    hra: parseFloat(r.hra) || 0,
+  }));
+
+  const { data, error } = await supabase.from('employees').insert(payloads).select();
+  if(error){
+    $('emp-import-summary').innerHTML = `<div class="import-summary-box msg error">Import failed: ${error.message}</div>`;
+  } else {
+    $('emp-import-summary').innerHTML = `<div class="import-summary-box msg success">Imported ${data.length} employee(s) successfully.</div>`;
+    await loadEmployees();
+  }
+  $('csv-file-input').value = '';
+});
 
 $('btn-signout').addEventListener('click', async ()=>{
   await supabase.auth.signOut();
@@ -524,7 +953,6 @@ $('btn-signout').addEventListener('click', async ()=>{
 (async function boot(){
   const { data: { session } } = await supabase.auth.getSession();
   if(session){ await routeAfterAuth(); } else { showScreen('screen-auth'); }
-})();
 })();
 </script>
 </body>
