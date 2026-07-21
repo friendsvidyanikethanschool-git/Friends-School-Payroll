@@ -890,8 +890,19 @@ $('btn-emp-save').addEventListener('click', async ()=>{
 
 // --- CSV export ---
 $('btn-csv-export').addEventListener('click', ()=>{
-  const headers = ['emp_code','full_name','designation','department','date_of_joining','status','phone','basic','hra'];
-  const rows = allEmployees.map(e => headers.map(h => `"${(e[h] ?? '').toString().replace(/"/g,'""')}"`).join(','));
+  const headers = [
+    'emp_code','full_name','designation','department','date_of_joining','employment_type','work_location',
+    'status','last_working_day',
+    'date_of_birth','gender','marital_status','blood_group','phone','personal_email','aadhaar_no',
+    'emergency_contact_name','emergency_contact_phone',
+    'pan_no','pf_number','uan_no','esi_number','pf_applicable','esi_applicable',
+    'bank_name','bank_account_no','ifsc_code',
+    'basic','hra','allowances'
+  ];
+  const rows = allEmployees.map(e => headers.map(h=>{
+    let val = h === 'allowances' ? JSON.stringify(e.allowances || {}) : (e[h] ?? '');
+    return `"${val.toString().replace(/"/g,'""')}"`;
+  }).join(','));
   const csv = [headers.join(','), ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
@@ -900,7 +911,26 @@ $('btn-csv-export').addEventListener('click', ()=>{
   a.click();
 });
 
-// --- CSV import (basic fields: full_name required; emp_code optional -> auto) ---
+// --- CSV import (full field set; full_name required, emp_code optional -> auto) ---
+function parseCsvLine(line){
+  const cells = [];
+  let cur = '', inQuotes = false;
+  for(let i = 0; i < line.length; i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c === '"' && line[i+1] === '"'){ cur += '"'; i++; }
+      else if(c === '"'){ inQuotes = false; }
+      else { cur += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ cells.push(cur); cur = ''; }
+      else { cur += c; }
+    }
+  }
+  cells.push(cur);
+  return cells.map(c => c.trim());
+}
+
 $('btn-csv-import').addEventListener('click', ()=> $('csv-file-input').click());
 $('csv-file-input').addEventListener('change', async (ev)=>{
   const file = ev.target.files[0];
@@ -908,9 +938,9 @@ $('csv-file-input').addEventListener('change', async (ev)=>{
   const text = await file.text();
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   if(lines.length < 2){ return; }
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const headers = parseCsvLine(lines[0]);
   const records = lines.slice(1).map(line=>{
-    const cells = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const cells = parseCsvLine(line);
     const obj = {};
     headers.forEach((h,i)=>{ if(cells[i] !== undefined && cells[i] !== '') obj[h] = cells[i]; });
     return obj;
@@ -927,10 +957,31 @@ $('csv-file-input').addEventListener('change', async (ev)=>{
     designation: r.designation || null,
     department: r.department || null,
     date_of_joining: r.date_of_joining || null,
+    employment_type: r.employment_type || 'full_time',
+    work_location: r.work_location || null,
     status: r.status || 'active',
+    last_working_day: r.last_working_day || null,
+    date_of_birth: r.date_of_birth || null,
+    gender: r.gender || null,
+    marital_status: r.marital_status || null,
+    blood_group: r.blood_group || null,
     phone: r.phone || null,
+    personal_email: r.personal_email || null,
+    aadhaar_no: r.aadhaar_no || null,
+    emergency_contact_name: r.emergency_contact_name || null,
+    emergency_contact_phone: r.emergency_contact_phone || null,
+    pan_no: r.pan_no || null,
+    pf_number: r.pf_number || null,
+    uan_no: r.uan_no || null,
+    esi_number: r.esi_number || null,
+    pf_applicable: r.pf_applicable ? r.pf_applicable.toLowerCase() !== 'false' : true,
+    esi_applicable: r.esi_applicable ? r.esi_applicable.toLowerCase() !== 'false' : true,
+    bank_name: r.bank_name || null,
+    bank_account_no: r.bank_account_no || null,
+    ifsc_code: r.ifsc_code || null,
     basic: parseFloat(r.basic) || 0,
     hra: parseFloat(r.hra) || 0,
+    allowances: (() => { try { return r.allowances ? JSON.parse(r.allowances) : {}; } catch(e){ return {}; } })(),
   }));
 
   const { data, error } = await supabase.from('employees').insert(payloads).select();
