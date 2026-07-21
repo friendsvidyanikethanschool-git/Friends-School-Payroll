@@ -4,2801 +4,524 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Friends School Payroll</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1f6feb">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
-    --brand:#1f6feb; --brand-dark:#164ea8; --bg:#f4f6f9; --card:#ffffff;
-    --text:#1c2733; --muted:#6b7785; --border:#e1e6ec; --danger:#d1453b;
-    --ok:#1c9d63; --warn:#c9860b;
+    --paper:#F7F5F0;
+    --paper-raised:#FFFFFF;
+    --ink:#1C2B33;
+    --ink-soft:#4B5B63;
+    --rule:#DCD6C8;
+    --gold:#B8863E;
+    --gold-soft:#E7D6B5;
+    --green:#4C7A5D;
+    --green-soft:#DCE8DF;
+    --red:#A64B44;
+    --red-soft:#F3DEDB;
+    --radius:6px;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
-  a{color:var(--brand);}
-  button{font-family:inherit;cursor:pointer;}
-  input,select,textarea{font-family:inherit;}
-
-  /* ---------- Login ---------- */
-  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1f6feb,#123a72);}
-  .login-card{background:var(--card);padding:36px 32px;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:340px;}
-  .login-card h1{font-size:20px;margin:0 0 4px;}
-  .login-card p{color:var(--muted);font-size:13px;margin:0 0 20px;}
-  .login-card input{width:100%;padding:10px 12px;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;}
-  .login-card button{width:100%;padding:11px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;margin-top:6px;}
-  .login-card button:hover{background:var(--brand-dark);}
-  .login-error{color:var(--danger);font-size:13px;margin-top:8px;min-height:16px;}
-
-  /* ---------- App shell ---------- */
-  #app{display:none;min-height:100vh;}
-  .shell{display:flex;min-height:100vh;}
-  .sidebar{width:220px;background:#132339;color:#cdd8e6;flex-shrink:0;display:flex;flex-direction:column;}
-  .sidebar .brand{padding:20px 18px;font-weight:700;font-size:15px;color:#fff;border-bottom:1px solid rgba(255,255,255,.08);}
-  .sidebar .brand small{display:block;font-weight:400;color:#8ea3bd;font-size:11px;margin-top:2px;}
-  .nav-item{padding:12px 18px;font-size:14px;cursor:pointer;border-left:3px solid transparent;color:#b7c4d6;}
-  .nav-item:hover{background:rgba(255,255,255,.06);}
-  .nav-item.active{background:rgba(255,255,255,.09);border-left-color:var(--brand);color:#fff;font-weight:600;}
-  .sidebar-footer{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:#8ea3bd;}
-  .sidebar-footer button{background:none;border:1px solid #3a4c66;color:#cdd8e6;padding:6px 10px;border-radius:6px;font-size:12px;margin-top:8px;}
-
-  .main{flex:1;padding:24px 28px;overflow-x:auto;}
-  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
-  .topbar h2{margin:0;font-size:20px;}
-  .role-badge{font-size:11px;padding:3px 9px;border-radius:20px;background:#eef2ff;color:var(--brand-dark);font-weight:600;text-transform:uppercase;}
-
-  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px;}
-  .grid-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px;}
-  .kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;}
-  .kpi .label{font-size:12px;color:var(--muted);}
-  .kpi .value{font-size:22px;font-weight:700;margin-top:4px;}
-
-  table{width:100%;border-collapse:collapse;font-size:13.5px;}
-  th,td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
-  th{background:#f8fafc;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;}
-  tr:hover td{background:#fafcff;}
-  .table-wrap{overflow-x:auto;}
-
-  .btn{display:inline-block;padding:8px 14px;border-radius:7px;border:1px solid var(--border);background:#fff;font-size:13px;font-weight:600;color:var(--text);}
-  .btn:hover{background:#f2f5f9;}
-  .btn-primary{background:var(--brand);border-color:var(--brand);color:#fff;}
-  .btn-primary:hover{background:var(--brand-dark);}
-  .btn-danger{color:var(--danger);border-color:#f3c9c6;}
-  .btn-sm{padding:5px 10px;font-size:12px;}
-  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
-
-  .badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;}
-  .badge-active{background:#e5f7ee;color:var(--ok);}
-  .badge-inactive{background:#f2f2f2;color:var(--muted);}
-  .badge-left{background:#fff3e0;color:var(--warn);}
-  .badge-terminated{background:#fdecea;color:var(--danger);}
-  .badge-draft{background:#fff3e0;color:var(--warn);}
-  .badge-finalized{background:#e5f7ee;color:var(--ok);}
-
-  input.tbl-input{width:64px;padding:5px 6px;border:1px solid var(--border);border-radius:5px;font-size:13px;}
-
-  /* Modal */
-  .overlay{display:none;position:fixed;inset:0;background:rgba(20,30,45,.5);align-items:center;justify-content:center;z-index:50;}
-  .overlay.show{display:flex;}
-  .modal{background:#fff;border-radius:12px;width:520px;max-width:92vw;max-height:88vh;overflow-y:auto;padding:22px 24px;}
-  .modal h3{margin-top:0;}
-  .form-row{margin-bottom:12px;}
-  .form-row label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px;font-weight:600;}
-  .form-row input,.form-row select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13.5px;}
-  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;}
-  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
-  .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;}
-
-  .muted{color:var(--muted);font-size:12.5px;}
-  .section-title{font-size:14px;font-weight:700;margin:18px 0 8px;color:var(--text);}
-  select.period-select,input.period-input{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13.5px;}
-
-  /* Payslip print */
-  .payslip{max-width:640px;margin:0 auto;background:#fff;padding:28px;border:1px solid var(--border);border-radius:10px;}
-  .payslip h2{margin:0 0 2px;}
-  .payslip .muted-sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
-  .payslip table td{border:none;padding:4px 0;}
-  .payslip .totals-row td{font-weight:700;border-top:1px solid var(--border);padding-top:8px;}
-  @media print{
-    body *{visibility:hidden;}
-    #print-area, #print-area *{visibility:visible;}
-    #print-area{position:absolute;left:0;top:0;width:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
   }
+  h1,h2,h3{
+    font-family:'Source Serif 4',serif;
+    font-weight:600;
+    margin:0 0 4px 0;
+    letter-spacing:-0.01em;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;letter-spacing:0.02em;}
+  .app{min-height:100vh;display:flex;flex-direction:column;}
 
-  .toast{position:fixed;bottom:20px;right:20px;background:#1c2733;color:#fff;padding:11px 18px;border-radius:8px;font-size:13.5px;z-index:100;box-shadow:0 8px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(10px);transition:all .25s;}
-  .toast.show{opacity:1;transform:translateY(0);}
-  .toast.error{background:var(--danger);}
+  /* ---------- Centered auth/onboarding card ---------- */
+  .center-screen{
+    flex:1;display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .card{
+    background:var(--paper-raised);
+    border:1px solid var(--rule);
+    border-radius:var(--radius);
+    padding:36px 34px;
+    width:100%;
+    max-width:420px;
+    box-shadow:0 1px 2px rgba(28,43,51,0.04);
+  }
+  .card.wide{max-width:520px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin-bottom:10px;
+  }
+  .subtitle{color:var(--ink-soft);font-size:14px;margin-bottom:24px;line-height:1.5;}
 
-  code{background:#f2f5f9;padding:2px 5px;border-radius:4px;font-size:12px;}
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text],input[type=email],input[type=password],select{
+    width:100%;padding:10px 12px;border:1px solid var(--rule);border-radius:var(--radius);
+    font-family:'Inter',sans-serif;font-size:14px;background:#fff;color:var(--ink);
+  }
+  input:focus,select:focus,button:focus-visible{
+    outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold);
+  }
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    padding:11px 18px;border-radius:var(--radius);border:none;cursor:pointer;
+    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;
+    transition:transform .05s ease, background .15s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--ink);color:#fff;width:100%;margin-top:20px;}
+  .btn-primary:hover{background:#0f1a20;}
+  .btn-primary:disabled{background:var(--rule);color:#8a8478;cursor:not-allowed;}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--rule);width:100%;margin-top:10px;}
+  .btn-ghost:hover{border-color:var(--ink-soft);}
+  .link-btn{background:none;border:none;color:var(--gold);font-weight:600;cursor:pointer;font-size:13px;padding:0;}
 
-  /* Attendance calendar */
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px;}
-  .cal-dow{font-size:11px;color:var(--muted);text-align:center;font-weight:600;padding-bottom:4px;}
-  .cal-cell{border-radius:7px;padding:6px 4px;font-size:11px;min-height:48px;background:#f8fafc;border:1px solid var(--border);}
-  .cal-cell .cal-day-num{font-weight:700;font-size:12px;}
-  .cal-cell.cal-full{background:#e5f7ee;border-color:#bfe9d3;}
-  .cal-cell.cal-half{background:#fff8e6;border-color:#f3e0a8;}
-  .cal-cell.cal-absent{background:#fdecea;border-color:#f3c9c6;}
-  .cal-cell.cal-holiday{background:#e8eefc;border-color:#c6d4f5;}
-  .cal-cell.cal-leave{background:#f3e8fc;border-color:#dcc2f5;}
-  .cal-cell.cal-pending{background:#fff4e5;border-color:#f5c67d;}
-  .cal-cell.cal-arrear{background:#eef2ff;border-color:#c7d2fe;}
-  .cal-cell.cal-upcoming{background:#f2f5f9;color:var(--muted);}
-  .cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
-  .cal-legend span{display:inline-flex;align-items:center;gap:5px;}
-  .cal-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+  .msg{font-size:13px;padding:10px 12px;border-radius:var(--radius);margin-top:14px;}
+  .msg.error{background:var(--red-soft);color:var(--red);}
+  .msg.success{background:var(--green-soft);color:var(--green);}
+
+  .divider{display:flex;align-items:center;gap:12px;margin:22px 0 6px;color:var(--ink-soft);font-size:12px;}
+  .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--rule);}
+
+  .choice-row{display:flex;gap:12px;margin-top:6px;}
+  .choice{
+    flex:1;border:1px solid var(--rule);border-radius:var(--radius);padding:16px 14px;
+    cursor:pointer;background:#fff;text-align:left;transition:border-color .15s;
+  }
+  .choice:hover{border-color:var(--gold);}
+  .choice.selected{border-color:var(--gold);background:var(--gold-soft);}
+  .choice .choice-title{font-weight:700;font-size:14px;margin-bottom:3px;}
+  .choice .choice-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.4;}
+
+  .school-result{
+    border:1px solid var(--rule);border-radius:var(--radius);padding:10px 12px;margin-top:6px;
+    cursor:pointer;font-size:14px;background:#fff;
+  }
+  .school-result:hover{border-color:var(--gold);}
+  .school-result.selected{border-color:var(--gold);background:var(--gold-soft);font-weight:600;}
+
+  /* ---------- Dashboard shell ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 28px;border-bottom:1px solid var(--rule);background:var(--paper-raised);
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-stamp{
+    width:34px;height:34px;border-radius:50%;border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Source Serif 4',serif;font-weight:700;color:var(--gold);font-size:15px;
+  }
+  .brand-name{font-family:'Source Serif 4',serif;font-weight:600;font-size:17px;}
+  .brand-sub{font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;letter-spacing:.03em;}
+  .who{display:flex;align-items:center;gap:14px;}
+  .role-pill{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+    letter-spacing:.06em;background:var(--green-soft);color:var(--green);
+    padding:4px 9px;border-radius:100px;
+  }
+  .signout{background:none;border:none;color:var(--ink-soft);font-size:13px;cursor:pointer;text-decoration:underline;}
+
+  .layout{display:flex;flex:1;}
+  .sidebar{
+    width:220px;border-right:1px solid var(--rule);padding:20px 12px;background:var(--paper-raised);
+  }
+  .nav-item{
+    display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius);
+    color:var(--ink-soft);font-size:13.5px;font-weight:500;margin-bottom:2px;cursor:default;
+  }
+  .nav-item.active{background:var(--ink);color:#fff;}
+  .nav-item.soon{opacity:.55;}
+  .nav-item .soon-tag{
+    margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:9.5px;
+    background:var(--rule);color:var(--ink-soft);padding:2px 5px;border-radius:4px;
+  }
+  .main{flex:1;padding:32px 36px;}
+  .welcome-panel{
+    background:var(--paper-raised);border:1px solid var(--rule);border-radius:var(--radius);
+    padding:28px 30px;max-width:640px;
+  }
+  .welcome-panel .eyebrow{margin-bottom:14px;}
+  .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--rule);font-size:14px;}
+  .kv:last-child{border-bottom:none;}
+  .kv span:first-child{color:var(--ink-soft);}
+  .kv span:last-child{font-weight:600;}
+  .hidden{display:none !important;}
+  .spinner{
+    width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+    border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-right:8px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
+<div class="app" id="app">
 
-<!-- ================= LOGIN ================= -->
-<div id="login-screen">
-  <div class="login-card" id="login-card-signin">
-    <h1>Friends School Payroll</h1>
-    <p>Sign in to continue</p>
-    <input type="email" id="login-email" placeholder="Email">
-    <input type="password" id="login-password" placeholder="Password">
-    <button onclick="doLogin()">Sign In</button>
-    <div class="login-error" id="login-error"></div>
-    <p style="text-align:center;margin-top:14px;font-size:12.5px;">
-      New staff member? <a href="#" onclick="toggleSignup(true);return false;">Create your account</a>
-    </p>
-  </div>
+  <!-- ================= AUTH ================= -->
+  <div class="center-screen" id="screen-auth">
+    <div class="card">
+      <div class="eyebrow">Friends School Payroll</div>
+      <h1 id="auth-title">Sign in</h1>
+      <p class="subtitle" id="auth-subtitle">Enter your email and password to continue.</p>
 
-  <div class="login-card" id="login-card-signup" style="display:none;">
-    <h1>Create Account</h1>
-    <p>Enter the Employee Code given by your school office to link your account to your payroll record.</p>
-    <input type="text" id="signup-emp-code" placeholder="Employee Code">
-    <input type="email" id="signup-email" placeholder="Email">
-    <input type="password" id="signup-password" placeholder="Choose a password">
-    <button onclick="doEmployeeSignup()">Create Account</button>
-    <div class="login-error" id="signup-error"></div>
-    <p style="text-align:center;margin-top:14px;font-size:12.5px;">
-      Already have an account? <a href="#" onclick="toggleSignup(false);return false;">Sign in</a>
-    </p>
-  </div>
-</div>
-
-<!-- ================= APP ================= -->
-<div id="app">
-  <div class="shell">
-    <div class="sidebar">
-      <div class="brand">Friends School<small>Payroll System</small></div>
-      <div id="nav-items"></div>
-      <div class="sidebar-footer">
-        Signed in as<br><strong id="sidebar-user" style="color:#fff;"></strong>
-        <button onclick="doLogout()">Sign out</button>
+      <div id="signup-name-wrap" class="hidden">
+        <label for="f-name">Full name</label>
+        <input type="text" id="f-name" placeholder="e.g. Radha Krishnan">
       </div>
-    </div>
+      <label for="f-email">Email</label>
+      <input type="email" id="f-email" placeholder="you@example.com">
+      <label for="f-password">Password</label>
+      <input type="password" id="f-password" placeholder="At least 6 characters">
 
-    <div class="main">
-      <div class="topbar">
-        <h2 id="view-title">Dashboard</h2>
-        <div style="display:flex;align-items:center;gap:14px;">
-          <div style="position:relative;">
-            <button class="btn btn-sm" onclick="toggleNotifPanel()">🔔 <span id="notif-count" style="display:none;background:var(--danger);color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;margin-left:4px;">0</span></button>
-            <div id="notif-panel" style="display:none;position:absolute;right:0;top:38px;width:320px;max-height:360px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);z-index:60;"></div>
-          </div>
-          <span class="role-badge" id="role-badge">viewer</span>
+      <button class="btn btn-primary" id="btn-auth-submit">Sign in</button>
+      <div id="auth-msg"></div>
+
+      <div class="divider">or</div>
+      <button class="link-btn" id="btn-toggle-mode" style="margin-top:12px;width:100%;text-align:center;">
+        New here? Create an account
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= ONBOARDING ================= -->
+  <div class="center-screen hidden" id="screen-onboarding">
+    <div class="card wide">
+      <div class="eyebrow">One more step</div>
+      <h1>Set up your account</h1>
+      <p class="subtitle">Are you setting up payroll for your school, or joining a school that already uses this?</p>
+
+      <div class="choice-row">
+        <button class="choice" id="choice-admin">
+          <div class="choice-title">I'm setting up my school</div>
+          <div class="choice-desc">Creates a new school workspace and makes you its admin.</div>
+        </button>
+        <button class="choice" id="choice-employee">
+          <div class="choice-title">I'm an employee</div>
+          <div class="choice-desc">Join a school that's already set up, using your Employee Code.</div>
+        </button>
+      </div>
+
+      <!-- Admin: create school -->
+      <div class="hidden" id="onboard-admin" style="margin-top:22px;">
+        <label for="ob-school-name">School name</label>
+        <input type="text" id="ob-school-name" placeholder="e.g. Friends Vidyanikethan School">
+        <label for="ob-state">State</label>
+        <select id="ob-state">
+          <option value="AP" selected>Andhra Pradesh</option>
+          <option value="TS">Telangana</option>
+          <option value="KA">Karnataka</option>
+          <option value="TN">Tamil Nadu</option>
+          <option value="OTHER">Other</option>
+        </select>
+        <label for="ob-prefix">Employee code prefix</label>
+        <input type="text" id="ob-prefix" placeholder="e.g. FVN" maxlength="6" style="text-transform:uppercase;">
+        <button class="btn btn-primary" id="btn-create-school">Create school</button>
+      </div>
+
+      <!-- Employee: find school + link -->
+      <div class="hidden" id="onboard-employee" style="margin-top:22px;">
+        <label for="ob-school-search">Find your school</label>
+        <input type="text" id="ob-school-search" placeholder="Start typing the school name...">
+        <div id="school-results" style="margin-top:8px;"></div>
+        <div id="emp-code-wrap" class="hidden">
+          <label for="ob-emp-code">Your Employee Code</label>
+          <input type="text" id="ob-emp-code" placeholder="e.g. FVN-EMP-014">
+          <button class="btn btn-primary" id="btn-link-employee">Join school</button>
         </div>
       </div>
-      <div id="view-content"></div>
+
+      <div id="onboard-msg"></div>
+      <button class="link-btn" id="btn-onboard-back" style="margin-top:16px;">&larr; Back</button>
     </div>
   </div>
 
-</div>
-
-<!-- ================= Employee Modal ================= -->
-<div class="overlay" id="employee-modal">
-  <div class="modal">
-    <h3 id="employee-modal-title">Add Employee</h3>
-    <input type="hidden" id="emp-id">
-    <div class="form-grid">
-      <div class="form-row"><label>Employee Code</label><input id="emp-code" readonly style="background:#f2f5f9;color:var(--muted);"></div>
-      <div class="form-row"><label>Full Name</label><input id="emp-name"></div>
-      <div class="form-row"><label>Designation</label><input id="emp-designation"></div>
-      <div class="form-row"><label>Department</label><input id="emp-department"></div>
-      <div class="form-row"><label>Date of Joining</label><input type="date" id="emp-doj"></div>
-      <div class="form-row"><label>Status</label>
-        <select id="emp-status" onchange="toggleLastWorkingDay()">
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="left">Left</option>
-          <option value="terminated">Terminated</option>
-        </select>
+  <!-- ================= DASHBOARD SHELL ================= -->
+  <div class="hidden" id="screen-dashboard" style="display:flex;flex-direction:column;flex:1;">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-stamp" id="brand-initial">F</div>
+        <div>
+          <div class="brand-name" id="brand-school-name">School Payroll</div>
+          <div class="brand-sub" id="brand-fy">FY 2026-27</div>
+        </div>
       </div>
-      <div class="form-row" id="emp-lwd-row" style="display:none;"><label>Last Working Day</label><input type="date" id="emp-lwd"></div>
-      <div class="form-row"><label>Basic Pay (₹)</label><input type="number" id="emp-basic" step="0.01"></div>
-      <div class="form-row"><label>HRA (₹)</label><input type="number" id="emp-hra" step="0.01"></div>
-      <div class="form-row"><label>Phone</label><input id="emp-phone"></div>
-      <div class="form-row"><label>Bank Name</label><input id="emp-bank-name"></div>
-      <div class="form-row"><label>Bank Account No.</label><input id="emp-bank-acc"></div>
-      <div class="form-row"><label>IFSC Code</label><input id="emp-ifsc"></div>
-      <div class="form-row"><label>PAN No.</label><input id="emp-pan"></div>
+      <div class="who">
+        <span class="role-pill" id="who-role">admin</span>
+        <span id="who-name" style="font-size:13px;"></span>
+        <button class="signout" id="btn-signout">Sign out</button>
+      </div>
     </div>
-
-    <div class="section-title" style="margin-top:4px;">Other Salary Components</div>
-    <p class="muted" style="margin-top:-4px;">e.g. Tuition Salary, Special Allowance, Conveyance — add as many as needed.</p>
-    <div id="emp-allowance-rows"></div>
-    <button type="button" class="btn btn-sm" onclick="addAllowanceRow()">+ Add Component</button>
-
-    <div class="check-row" style="margin-top:14px;"><input type="checkbox" id="emp-pf" checked> <label for="emp-pf" style="margin:0;">PF applicable</label></div>
-    <div class="check-row"><input type="checkbox" id="emp-esi" checked> <label for="emp-esi" style="margin:0;">ESI applicable</label></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal('employee-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveEmployee()">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- ================= Payslip Modal ================= -->
-<div class="overlay" id="payslip-modal">
-  <div class="modal" style="width:640px;">
-    <div id="print-area"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal('payslip-modal')">Close</button>
-      <button class="btn btn-primary" onclick="window.print()">Print / Save PDF</button>
+    <div class="layout">
+      <div class="sidebar" id="sidebar"></div>
+      <div class="main">
+        <div class="welcome-panel">
+          <div class="eyebrow">You're all set</div>
+          <h2 id="welcome-heading">Welcome</h2>
+          <p class="subtitle" id="welcome-sub">Your account is linked and ready.</p>
+          <div class="kv"><span>School</span><span id="wk-school">&mdash;</span></div>
+          <div class="kv"><span>Role</span><span id="wk-role">&mdash;</span></div>
+          <div class="kv"><span>Signed in as</span><span id="wk-user">&mdash;</span></div>
+          <div class="kv"><span>Next module</span><span>Employee Master</span></div>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
+</div>
 
 <script>
-/* ============================================================================
-   CONFIG — fill in your Supabase project details
-   ============================================================================ */
+// ============================================================================
+// CONFIG — fill these in from Supabase → Project Settings → API
+// ============================================================================
 const SUPABASE_URL = 'https://dhvlwjnbyupsdnkzmxrx.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_AxCrCuluaJQw2aVyRWn09w_QLPlCeSM';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ============================================================================
-   GLOBAL STATE
-   ============================================================================ */
-let CURRENT_PROFILE = null;   // { id, full_name, role }
-let SETTINGS = {};            // pf / esi / pt_slabs_ap / pt_march_extra / school_location / attendance_rules / leave_entitlements
-let EMPLOYEES_CACHE = [];
-let CURRENT_VIEW = 'dashboard';
-let MY_EMPLOYEE = null;       // employee row linked to the logged-in user (role === 'employee')
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let mode = 'signin'; // 'signin' | 'signup'
+let selectedSchool = null; // {id, name} while joining as employee
 
-const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+const $ = (id) => document.getElementById(id);
+const show = (id) => $(id).classList.remove('hidden');
+const hide = (id) => $(id).classList.add('hidden');
 
-const NAV_STAFF = [
-  { view:'dashboard', label:'Dashboard' },
-  { view:'employees', label:'Employees' },
-  { view:'attendance', label:'Attendance' },
-  { view:'backfill-requests', label:'Attendance Backfill' },
-  { view:'leave-requests', label:'Leave Requests' },
-  { view:'payroll', label:'Payroll Run' },
-  { view:'payslips', label:'Payslips' },
-  { view:'reports', label:'Reports' },
-  { view:'settings', label:'Settings' }
+function setMsg(el, text, type){
+  el.innerHTML = text ? `<div class="msg ${type}">${text}</div>` : '';
+}
+
+// ---------------------------------------------------------------------------
+// Screen switching
+// ---------------------------------------------------------------------------
+function showScreen(name){
+  ['screen-auth','screen-onboarding','screen-dashboard'].forEach(id=>{
+    if(id===name){ $(id).classList.remove('hidden'); }
+    else { $(id).classList.add('hidden'); }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Auth: sign in / sign up toggle
+// ---------------------------------------------------------------------------
+$('btn-toggle-mode').addEventListener('click', ()=>{
+  mode = mode === 'signin' ? 'signup' : 'signin';
+  if(mode === 'signup'){
+    $('auth-title').textContent = 'Create your account';
+    $('auth-subtitle').textContent = 'Set a password — we\'ll figure out your role next.';
+    $('btn-auth-submit').textContent = 'Create account';
+    $('btn-toggle-mode').textContent = 'Already have an account? Sign in';
+    show('signup-name-wrap');
+  } else {
+    $('auth-title').textContent = 'Sign in';
+    $('auth-subtitle').textContent = 'Enter your email and password to continue.';
+    $('btn-auth-submit').textContent = 'Sign in';
+    $('btn-toggle-mode').textContent = 'New here? Create an account';
+    hide('signup-name-wrap');
+  }
+  setMsg($('auth-msg'), '', '');
+});
+
+$('btn-auth-submit').addEventListener('click', async ()=>{
+  const email = $('f-email').value.trim();
+  const password = $('f-password').value;
+  const fullName = $('f-name').value.trim();
+  const btn = $('btn-auth-submit');
+  if(!email || !password){ setMsg($('auth-msg'), 'Email and password are required.', 'error'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Please wait...';
+
+  try{
+    if(mode === 'signup'){
+      const { data, error } = await supabase.auth.signUp({
+        email, password, options: { data: { full_name: fullName } }
+      });
+      if(error) throw error;
+      if(data.session){
+        await routeAfterAuth();
+      } else {
+        setMsg($('auth-msg'), 'Check your email to confirm your account, then sign in.', 'success');
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+      await routeAfterAuth();
+    }
+  } catch(err){
+    setMsg($('auth-msg'), err.message || 'Something went wrong.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Routing after auth: check profile → auth screen / onboarding / dashboard
+// ---------------------------------------------------------------------------
+async function routeAfterAuth(){
+  const { data: { user } } = await supabase.auth.getUser();
+  if(!user){ showScreen('screen-auth'); return; }
+
+  const { data: profile, error } = await supabase
+    .from('profiles').select('*, schools(name)').eq('id', user.id).maybeSingle();
+
+  if(error || !profile){
+    showScreen('screen-onboarding');
+    return;
+  }
+
+  if(!profile.school_id || profile.role === 'pending'){
+    showScreen('screen-onboarding');
+  } else {
+    renderDashboard(profile, user);
+    showScreen('screen-dashboard');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding: choice buttons
+// ---------------------------------------------------------------------------
+$('choice-admin').addEventListener('click', ()=>{
+  $('choice-admin').classList.add('selected');
+  $('choice-employee').classList.remove('selected');
+  show('onboard-admin'); hide('onboard-employee');
+});
+$('choice-employee').addEventListener('click', ()=>{
+  $('choice-employee').classList.add('selected');
+  $('choice-admin').classList.remove('selected');
+  show('onboard-employee'); hide('onboard-admin');
+});
+
+$('btn-create-school').addEventListener('click', async ()=>{
+  const name = $('ob-school-name').value.trim();
+  const state = $('ob-state').value;
+  const prefix = $('ob-prefix').value.trim().toUpperCase() || 'EMP';
+  if(!name){ setMsg($('onboard-msg'), 'School name is required.', 'error'); return; }
+
+  const btn = $('btn-create-school');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Creating...';
+  try{
+    const { data, error } = await supabase.rpc('create_school_and_become_admin', {
+      p_school_name: name, p_state: state, p_emp_code_prefix: prefix
+    });
+    if(error) throw error;
+    if(data && data.success === false) throw new Error(data.message);
+    await routeAfterAuth();
+  } catch(err){
+    setMsg($('onboard-msg'), err.message || 'Could not create the school.', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create school';
+  }
+});
+
+let searchTimeout;
+$('ob-school-search').addEventListener('input', ()=>{
+  clearTimeout(searchTimeout);
+  const q = $('ob-school-search').value.trim();
+  selectedSchool = null; hide('emp-code-wrap');
+  if(q.length < 2){ $('school-results').innerHTML = ''; return; }
+  searchTimeout = setTimeout(async ()=>{
+    const { data, error } = await supabase.rpc('lookup_school', { p_query: q });
+    const box = $('school-results');
+    if(error || !data || data.length === 0){
+      box.innerHTML = '<div class="subtitle" style="margin:6px 0 0;">No school found with that name.</div>';
+      return;
+    }
+    box.innerHTML = data.map(s =>
+      `<div class="school-result" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;')}">${s.name}</div>`
+    ).join('');
+    box.querySelectorAll('.school-result').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        box.querySelectorAll('.school-result').forEach(x=>x.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedSchool = { id: el.dataset.id, name: el.dataset.name };
+        show('emp-code-wrap');
+      });
+    });
+  }, 350);
+});
+
+$('btn-link-employee').addEventListener('click', async ()=>{
+  const code = $('ob-emp-code').value.trim();
+  if(!selectedSchool){ setMsg($('onboard-msg'), 'Select your school first.', 'error'); return; }
+  if(!code){ setMsg($('onboard-msg'), 'Enter your Employee Code.', 'error'); return; }
+
+  const btn = $('btn-link-employee');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Joining...';
+  try{
+    const { data, error } = await supabase.rpc('link_employee_account', {
+      p_emp_code: code, p_school_id: selectedSchool.id
+    });
+    if(error) throw error;
+    if(data && data.success === false) throw new Error(data.message);
+    await routeAfterAuth();
+  } catch(err){
+    setMsg($('onboard-msg'), err.message || 'Could not link your account.', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Join school';
+  }
+});
+
+$('btn-onboard-back').addEventListener('click', async ()=>{
+  await supabase.auth.signOut();
+  showScreen('screen-auth');
+});
+
+// ---------------------------------------------------------------------------
+// Dashboard shell
+// ---------------------------------------------------------------------------
+const NAV_ITEMS = [
+  { label: 'Dashboard', active: true },
+  { label: 'Employee Master', soon: true },
+  { label: 'Attendance', soon: true },
+  { label: 'Leave', soon: true },
+  { label: 'Holiday Calendar', soon: true },
+  { label: 'Payroll Runs', soon: true },
+  { label: 'Payslips & Reports', soon: true },
+  { label: 'Settings', soon: true },
 ];
-const NAV_EMPLOYEE = [
-  { view:'my-attendance', label:'Mark Attendance' },
-  { view:'my-history', label:'My Attendance History' },
-  { view:'my-leave', label:'My Leave' },
-  { view:'my-payslips', label:'My Payslips' }
-];
 
-function buildSidebar(role){
-  const items = role === 'employee' ? NAV_EMPLOYEE : NAV_STAFF;
-  document.getElementById('nav-items').innerHTML = items.map((it,i)=>
-    `<div class="nav-item${i===0?' active':''}" data-view="${it.view}" onclick="switchView('${it.view}')">${it.label}</div>`
+function renderDashboard(profile, user){
+  const schoolName = profile.schools ? profile.schools.name : 'Your School';
+  $('brand-initial').textContent = schoolName.charAt(0).toUpperCase();
+  $('brand-school-name').textContent = schoolName;
+  $('who-role').textContent = profile.role;
+  $('who-name').textContent = profile.full_name || user.email;
+  $('welcome-heading').textContent = `Welcome, ${(profile.full_name || user.email).split(' ')[0]}`;
+  $('wk-school').textContent = schoolName;
+  $('wk-role').textContent = profile.role;
+  $('wk-user').textContent = user.email;
+
+  $('sidebar').innerHTML = NAV_ITEMS.map(n =>
+    `<div class="nav-item ${n.active ? 'active' : ''} ${n.soon ? 'soon' : ''}">
+       ${n.label}${n.soon ? '<span class="soon-tag">soon</span>' : ''}
+     </div>`
   ).join('');
 }
 
-/* ============================================================================
-   TOAST
-   ============================================================================ */
-function toast(msg, isError=false){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (isError ? ' error' : '');
-  setTimeout(()=> t.className='toast', 2600);
-}
-
-/* ============================================================================
-   AUTH
-   ============================================================================ */
-function toggleSignup(showSignup){
-  document.getElementById('login-card-signin').style.display = showSignup ? 'none' : 'block';
-  document.getElementById('login-card-signup').style.display = showSignup ? 'block' : 'none';
-}
-
-async function doLogin(){
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  const errEl = document.getElementById('login-error');
-  errEl.textContent = '';
-  if(!email || !password){ errEl.textContent = 'Enter email and password.'; return; }
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if(error){ errEl.textContent = error.message; return; }
-  await initAppAfterLogin();
-}
-
-async function doEmployeeSignup(){
-  const empCode = document.getElementById('signup-emp-code').value.trim();
-  const email = document.getElementById('signup-email').value.trim();
-  const password = document.getElementById('signup-password').value;
-  const errEl = document.getElementById('signup-error');
-  errEl.textContent = '';
-  if(!empCode || !email || !password){ errEl.textContent = 'Fill in all fields.'; return; }
-  if(password.length < 6){ errEl.textContent = 'Password must be at least 6 characters.'; return; }
-
-  const { data, error } = await sb.auth.signUp({ email, password });
-  if(error){ errEl.textContent = error.message; return; }
-
-  // Remember the employee code in case email confirmation is required before we can link
-  localStorage.setItem('pending_emp_code', empCode);
-
-  if(data.session){
-    // Email confirmation disabled on this project — we're logged in immediately
-    await linkPendingEmployeeCode();
-    await initAppAfterLogin();
-  } else {
-    errEl.style.color = 'var(--ok)';
-    errEl.textContent = 'Check your email to confirm your account, then sign in.';
-    toggleSignup(false);
-  }
-}
-
-async function linkPendingEmployeeCode(){
-  const empCode = localStorage.getItem('pending_emp_code');
-  if(!empCode) return;
-  const { data, error } = await sb.rpc('link_employee_account', { p_emp_code: empCode });
-  if(!error && data && data.success){
-    localStorage.removeItem('pending_emp_code');
-    toast('Account linked to your employee record.');
-  } else if(!error && data && !data.success){
-    toast(data.message || 'Could not link employee code — contact the school office.', true);
-  }
-}
-
-async function doLogout(){
-  await sb.auth.signOut();
+$('btn-signout').addEventListener('click', async ()=>{
+  await supabase.auth.signOut();
   location.reload();
-}
-
-async function initAppAfterLogin(){
-  const { data: { user } } = await sb.auth.getUser();
-  if(!user){ return; }
-
-  // If a signup happened earlier in this browser and wasn't linked yet, try now
-  if(localStorage.getItem('pending_emp_code')){
-    await linkPendingEmployeeCode();
-  }
-
-  let { data: profile, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
-  if(error || !profile){
-    toast('Could not load user profile.', true);
-    return;
-  }
-  CURRENT_PROFILE = profile;
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('sidebar-user').textContent = profile.full_name || user.email;
-  document.getElementById('role-badge').textContent = profile.role;
-  buildSidebar(profile.role);
-  await loadSettings();
-
-  if(profile.role === 'employee'){
-    const { data: emp } = await sb.from('employees').select('*').eq('user_id', user.id).maybeSingle();
-    MY_EMPLOYEE = emp || null;
-    switchView('my-attendance');
-  } else {
-    switchView('dashboard');
-  }
-
-  loadNotifications();
-  if(window._NOTIF_TIMER) clearInterval(window._NOTIF_TIMER);
-  window._NOTIF_TIMER = setInterval(loadNotifications, 60000);
-}
-
-/* Check session on load */
-(async function boot(){
-  const { data: { session } } = await sb.auth.getSession();
-  if(session){ await initAppAfterLogin(); }
-})();
-
-function can(...roles){ return CURRENT_PROFILE && roles.includes(CURRENT_PROFILE.role); }
-
-/* ============================================================================
-   SETTINGS
-   ============================================================================ */
-async function loadSettings(){
-  const { data, error } = await sb.from('settings').select('*');
-  if(error){ toast('Failed to load settings', true); return; }
-  SETTINGS = {};
-  data.forEach(row => SETTINGS[row.key] = row.value);
-}
-
-async function saveSettingKey(key, value){
-  const { error } = await sb.from('settings').update({ value, updated_at: new Date().toISOString() }).eq('key', key);
-  if(error){ toast('Save failed: ' + error.message, true); return false; }
-  SETTINGS[key] = value;
-  toast('Settings saved');
-  return true;
-}
-
-/* ============================================================================
-   NAVIGATION / VIEW ROUTER
-   ============================================================================ */
-function switchView(view){
-  CURRENT_VIEW = view;
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
-  const titles = { dashboard:'Dashboard', employees:'Employees', attendance:'Attendance', payroll:'Payroll Run', payslips:'Payslips', reports:'Reports', settings:'Settings',
-    'my-attendance':'Mark Attendance', 'my-history':'My Attendance History', 'my-payslips':'My Payslips',
-    'leave-requests':'Leave Requests', 'my-leave':'My Leave' };
-  document.getElementById('view-title').textContent = titles[view] || view;
-  const renderers = { dashboard: renderDashboard, employees: renderEmployees, attendance: renderAttendance, payroll: renderPayroll, payslips: renderPayslips, reports: renderReports, settings: renderSettings,
-    'my-attendance': renderMarkAttendance, 'my-history': renderMyHistory, 'my-payslips': renderMyPayslips,
-    'leave-requests': renderLeaveRequests, 'my-leave': renderMyLeave, 'backfill-requests': renderBackfillRequests };
-  const defaultView = (CURRENT_PROFILE && CURRENT_PROFILE.role === 'employee') ? renderMarkAttendance : renderDashboard;
-  (renderers[view] || defaultView)();
-
-  // Light auto-refresh so admins/employees see near-live data without manual reloads
-  if(window._AUTO_REFRESH_TIMER) clearInterval(window._AUTO_REFRESH_TIMER);
-  const AUTO_REFRESH_VIEWS = ['dashboard','leave-requests','my-attendance'];
-  if(AUTO_REFRESH_VIEWS.includes(view)){
-    window._AUTO_REFRESH_TIMER = setInterval(()=>{
-      if(CURRENT_VIEW === view) (renderers[view] || defaultView)();
-    }, 45000);
-  }
-}
-
-/* ============================================================================
-   DASHBOARD
-   ============================================================================ */
-async function renderDashboard(){
-  const content = document.getElementById('view-content');
-  content.innerHTML = '<p class="muted">Loading…</p>';
-
-  const { data: employees } = await sb.from('employees').select('id,emp_code,full_name,status');
-  const activeEmployees = (employees||[]).filter(e=>e.status==='active');
-  const activeCount = activeEmployees.length;
-
-  const now = new Date();
-  const todayStr = localDateStr(now);
-  const { data: runs } = await sb.from('payroll_runs').select('*').order('year',{ascending:false}).order('month',{ascending:false}).limit(6);
-
-  let latestNet = 0, latestLabel = '—';
-  if(runs && runs.length){
-    const latest = runs[0];
-    const { data: slips } = await sb.from('payslips').select('net_pay').eq('payroll_run_id', latest.id);
-    latestNet = (slips||[]).reduce((s,r)=>s+Number(r.net_pay),0);
-    latestLabel = MONTH_NAMES[latest.month] + ' ' + latest.year;
-  }
-
-  // Today's attendance
-  const { data: todayRows } = await sb.from('daily_attendance').select('employee_id, morning_marked_at, afternoon_marked_at').eq('date', todayStr);
-  const todayMap = {}; (todayRows||[]).forEach(r => todayMap[r.employee_id] = r);
-  const presentToday = activeEmployees.filter(e => todayMap[e.id] && (todayMap[e.id].morning_marked_at || todayMap[e.id].afternoon_marked_at)).length;
-  const absentToday = activeEmployees.filter(e => !todayMap[e.id]);
-
-  // Pending leave requests
-  const { data: pendingLeave } = await sb.from('leave_requests').select('id').eq('status','pending');
-
-  // Pending attendance backfill requests
-  const { data: pendingBackfill } = await sb.from('daily_attendance').select('id').eq('is_backfill', true).eq('backfill_status', 'pending');
-
-  // Missing attendance this week (Mon..today, excluding holidays)
-  const dayOfWeek = now.getDay(); // 0=Sun
-  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const monday = new Date(now); monday.setDate(now.getDate() - mondayOffset);
-  const weekDates = [];
-  for(let d=0; d<=mondayOffset; d++){ const dt = new Date(monday); dt.setDate(monday.getDate()+d); weekDates.push(localDateStr(dt)); }
-
-  const { data: holidayRows } = await sb.from('holidays').select('date').gte('date', weekDates[0]).lte('date', todayStr);
-  const holidaySet = new Set((holidayRows||[]).map(h=>h.date));
-  const { data: weekAttRows } = await sb.from('daily_attendance').select('employee_id,date').gte('date', weekDates[0]).lte('date', todayStr);
-  const weekAttSet = new Set((weekAttRows||[]).map(r=>r.employee_id+'|'+r.date));
-  const { data: weekLeaveRows } = await sb.from('leave_requests').select('employee_id,from_date,to_date').eq('status','approved').lte('from_date', todayStr).gte('to_date', weekDates[0]);
-
-  const missingByEmployee = {};
-  activeEmployees.forEach(e=>{
-    weekDates.filter(d => d <= todayStr && !holidaySet.has(d) && !isDefaultWeeklyHoliday(d)).forEach(d=>{
-      const onLeave = (weekLeaveRows||[]).some(lr => lr.employee_id===e.id && lr.from_date<=d && lr.to_date>=d);
-      if(!onLeave && !weekAttSet.has(e.id+'|'+d)){
-        missingByEmployee[e.id] = missingByEmployee[e.id] || { emp:e, days:[] };
-        missingByEmployee[e.id].days.push(d);
-      }
-    });
-  });
-  const missingList = Object.values(missingByEmployee);
-
-  content.innerHTML = `
-    <div class="grid-kpi">
-      <div class="kpi"><div class="label">Active Employees</div><div class="value">${activeCount}</div></div>
-      <div class="kpi"><div class="label">Present Today</div><div class="value">${presentToday} / ${activeCount}</div></div>
-      <div class="kpi"><div class="label">Pending Leave Requests</div><div class="value">${(pendingLeave||[]).length}</div></div>
-      <div class="kpi"><div class="label">Pending Backfill Requests</div><div class="value">${(pendingBackfill||[]).length}</div></div>
-      <div class="kpi"><div class="label">Latest Net Payout</div><div class="value">₹${latestNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Employees Absent Today (no check-in yet)</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Code</th><th>Name</th></tr></thead>
-        <tbody>${absentToday.map(e=>`<tr><td>${e.emp_code}</td><td>${e.full_name}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Everyone has checked in today.</td></tr>'}</tbody>
-      </table></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">This Week — Missing Attendance</div>
-      <p class="muted">Days with no check-in, no approved leave, and no holiday, from Monday through today.</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Code</th><th>Name</th><th>Missing Days</th></tr></thead>
-        <tbody>${missingList.map(m=>`<tr><td>${m.emp.emp_code}</td><td>${m.emp.full_name}</td><td>${m.days.join(', ')}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No gaps this week.</td></tr>'}</tbody>
-      </table></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Recent Payroll Runs</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Month</th><th>Status</th><th>Created</th><th></th></tr></thead>
-        <tbody>
-          ${(runs||[]).map(r=>`
-            <tr>
-              <td>${MONTH_NAMES[r.month]} ${r.year}</td>
-              <td><span class="badge badge-${r.status}">${r.status}</span></td>
-              <td>${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
-              <td><button class="btn btn-sm" onclick="switchView('payslips');setTimeout(()=>loadRunIntoPayslips('${r.id}'),50)">View payslips</button></td>
-            </tr>`).join('') || '<tr><td colspan="4" class="muted">No payroll runs yet.</td></tr>'}
-        </tbody>
-      </table></div>
-    </div>
-  `;
-}
-
-/* ============================================================================
-   EMPLOYEES
-   ============================================================================ */
-async function loadEmployees(){
-  const { data, error } = await sb.from('employees').select('*').order('emp_code');
-  if(error){ toast('Failed to load employees', true); return []; }
-  EMPLOYEES_CACHE = data;
-  return data;
-}
-
-async function renderEmployees(){
-  const content = document.getElementById('view-content');
-  content.innerHTML = '<p class="muted">Loading…</p>';
-  const employees = await loadEmployees();
-  const canEdit = can('admin','accountant');
-
-  content.innerHTML = `
-    <div class="btn-row">
-      ${canEdit ? `<button class="btn btn-primary" onclick="openEmployeeModal()">+ Add Employee</button>` : ''}
-      ${canEdit ? `<label class="btn" style="margin:0;">Import CSV<input type="file" accept=".csv" style="display:none" onchange="importEmployeesCSV(event)"></label>` : ''}
-      <button class="btn" onclick="exportEmployeesCSV()">Export CSV</button>
-      <a class="btn" href="data:text/csv;charset=utf-8,${encodeURIComponent('emp_code,full_name,designation,department,date_of_joining,basic,hra,allowances,pf_applicable,esi_applicable,phone,bank_name,bank_account_no,ifsc_code,pan_no\\n')}" download="employee_import_template.csv">Download template</a>
-    </div>
-    <div class="card">
-      <div class="table-wrap"><table>
-        <thead><tr>
-          <th>Code</th><th>Name</th><th>Designation</th><th>Dept</th>
-          <th>Basic</th><th>HRA</th><th>Allow.</th><th>PF</th><th>ESI</th><th>Status</th><th></th>
-        </tr></thead>
-        <tbody>
-          ${employees.map(e=>`
-            <tr>
-              <td>${e.emp_code}</td>
-              <td>${e.full_name}</td>
-              <td>${e.designation||''}</td>
-              <td>${e.department||''}</td>
-              <td>₹${Number(e.basic).toLocaleString('en-IN')}</td>
-              <td>₹${Number(e.hra).toLocaleString('en-IN')}</td>
-              <td>₹${sumAllowances(e.allowances).toLocaleString('en-IN')}</td>
-              <td>${e.pf_applicable?'Yes':'No'}</td>
-              <td>${e.esi_applicable?'Yes':'No'}</td>
-              <td><span class="badge badge-${e.status}">${e.status}</span></td>
-              <td>${canEdit ? `<button class="btn btn-sm" onclick="openEmployeeModal('${e.id}')">Edit</button>` : ''}</td>
-            </tr>`).join('') || '<tr><td colspan="11" class="muted">No employees yet.</td></tr>'}
-        </tbody>
-      </table></div>
-    </div>
-  `;
-}
-
-function sumAllowances(allowances){
-  if(!allowances) return 0;
-  if(typeof allowances === 'number') return allowances;
-  return Object.values(allowances).reduce((s,v)=>s+Number(v||0),0);
-}
-
-function toggleLastWorkingDay(){
-  const status = document.getElementById('emp-status').value;
-  const show = (status === 'left' || status === 'terminated');
-  document.getElementById('emp-lwd-row').style.display = show ? 'block' : 'none';
-}
-
-function addAllowanceRow(name='', amount=''){
-  const wrap = document.getElementById('emp-allowance-rows');
-  const row = document.createElement('div');
-  row.className = 'form-grid';
-  row.style.marginBottom = '6px';
-  row.innerHTML = `
-    <div class="form-row"><input class="allowance-name" placeholder="Component name (e.g. Tuition Salary)" value="${name.replace(/"/g,'&quot;')}"></div>
-    <div class="form-row" style="display:flex;gap:6px;">
-      <input class="allowance-amount" type="number" step="0.01" placeholder="Amount (₹)" value="${amount}" style="flex:1;">
-      <button type="button" class="btn btn-sm btn-danger" onclick="this.closest('.form-grid').remove()">✕</button>
-    </div>
-  `;
-  wrap.appendChild(row);
-}
-
-function openEmployeeModal(id){
-  document.getElementById('employee-modal-title').textContent = id ? 'Edit Employee' : 'Add Employee';
-  document.getElementById('emp-id').value = id || '';
-  const e = id ? EMPLOYEES_CACHE.find(x=>x.id===id) : null;
-  document.getElementById('emp-code').value = e?.emp_code || '(auto-generated on save)';
-  document.getElementById('emp-name').value = e?.full_name || '';
-  document.getElementById('emp-designation').value = e?.designation || '';
-  document.getElementById('emp-department').value = e?.department || '';
-  document.getElementById('emp-doj').value = e?.date_of_joining || '';
-  document.getElementById('emp-status').value = e?.status || 'active';
-  document.getElementById('emp-lwd').value = e?.last_working_day || '';
-  toggleLastWorkingDay();
-  document.getElementById('emp-basic').value = e?.basic ?? '';
-  document.getElementById('emp-hra').value = e?.hra ?? '';
-  document.getElementById('emp-phone').value = e?.phone || '';
-  document.getElementById('emp-bank-name').value = e?.bank_name || '';
-  document.getElementById('emp-bank-acc').value = e?.bank_account_no || '';
-  document.getElementById('emp-ifsc').value = e?.ifsc_code || '';
-  document.getElementById('emp-pan').value = e?.pan_no || '';
-  document.getElementById('emp-pf').checked = e ? !!e.pf_applicable : true;
-  document.getElementById('emp-esi').checked = e ? !!e.esi_applicable : true;
-
-  const rowsWrap = document.getElementById('emp-allowance-rows');
-  rowsWrap.innerHTML = '';
-  const allowances = e?.allowances || {};
-  const entries = Object.entries(allowances).filter(([k,v]) => Number(v) !== 0 || Object.keys(allowances).length);
-  if(entries.length){
-    entries.forEach(([name, amount]) => addAllowanceRow(name === 'other' ? 'Other Allowances' : name, amount));
-  } else {
-    addAllowanceRow();
-  }
-  document.getElementById('employee-modal').classList.add('show');
-}
-
-function closeModal(id){ document.getElementById(id).classList.remove('show'); }
-
-async function saveEmployee(){
-  const id = document.getElementById('emp-id').value;
-
-  const allowances = {};
-  document.querySelectorAll('#emp-allowance-rows .form-grid').forEach(row=>{
-    const name = row.querySelector('.allowance-name').value.trim();
-    const amount = parseFloat(row.querySelector('.allowance-amount').value || 0);
-    if(name && amount) allowances[name] = amount;
-  });
-
-  const status = document.getElementById('emp-status').value;
-  const payload = {
-    full_name: document.getElementById('emp-name').value.trim(),
-    designation: document.getElementById('emp-designation').value.trim(),
-    department: document.getElementById('emp-department').value.trim(),
-    date_of_joining: document.getElementById('emp-doj').value || null,
-    status,
-    last_working_day: (status === 'left' || status === 'terminated') ? (document.getElementById('emp-lwd').value || null) : null,
-    basic: parseFloat(document.getElementById('emp-basic').value || 0),
-    hra: parseFloat(document.getElementById('emp-hra').value || 0),
-    allowances,
-    phone: document.getElementById('emp-phone').value.trim(),
-    bank_name: document.getElementById('emp-bank-name').value.trim(),
-    bank_account_no: document.getElementById('emp-bank-acc').value.trim(),
-    ifsc_code: document.getElementById('emp-ifsc').value.trim(),
-    pan_no: document.getElementById('emp-pan').value.trim(),
-    pf_applicable: document.getElementById('emp-pf').checked,
-    esi_applicable: document.getElementById('emp-esi').checked,
-    updated_at: new Date().toISOString()
-  };
-  if(!payload.full_name){ toast('Employee name is required.', true); return; }
-
-  let error;
-  if(id){
-    ({ error } = await sb.from('employees').update(payload).eq('id', id));
-  } else {
-    ({ error } = await sb.from('employees').insert(payload));
-  }
-  if(error){ toast('Save failed: ' + error.message, true); return; }
-  toast('Employee saved');
-  closeModal('employee-modal');
-  renderEmployees();
-}
-
-function exportEmployeesCSV(){
-  const headers = ['emp_code','full_name','designation','department','date_of_joining','basic','hra','allowances_total','pf_applicable','esi_applicable','status'];
-  const rows = EMPLOYEES_CACHE.map(e => [e.emp_code,e.full_name,e.designation||'',e.department||'',e.date_of_joining||'',e.basic,e.hra,sumAllowances(e.allowances),e.pf_applicable,e.esi_applicable,e.status]);
-  downloadCSV('employees.csv', headers, rows);
-}
-
-function downloadCSV(filename, headers, rows){
-  const csv = [headers.join(','), ...rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function importEmployeesCSV(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  const text = await file.text();
-  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const headers = lines[0].split(',').map(h=>h.trim());
-  const rows = lines.slice(1).map(line => {
-    const cells = parseCSVLine(line);
-    const obj = {};
-    headers.forEach((h,i)=> obj[h] = cells[i]);
-    return obj;
-  });
-
-  const payloads = rows.map(r => {
-    const p = {
-      full_name: r.full_name,
-      designation: r.designation || null,
-      department: r.department || null,
-      date_of_joining: r.date_of_joining || null,
-      basic: parseFloat(r.basic || 0),
-      hra: parseFloat(r.hra || 0),
-      allowances: { other: parseFloat(r.allowances || 0) },
-      pf_applicable: String(r.pf_applicable).toLowerCase() !== 'false',
-      esi_applicable: String(r.esi_applicable).toLowerCase() !== 'false',
-      phone: r.phone || null,
-      bank_name: r.bank_name || null,
-      bank_account_no: r.bank_account_no || null,
-      ifsc_code: r.ifsc_code || null,
-      pan_no: r.pan_no || null,
-      status: 'active'
-    };
-    if(r.emp_code && r.emp_code.trim()) p.emp_code = r.emp_code.trim(); // otherwise auto-generated on insert
-    return p;
-  }).filter(p => p.full_name);
-
-  if(!payloads.length){ toast('No valid rows found in CSV.', true); return; }
-
-  const withCode = payloads.filter(p => p.emp_code);
-  const withoutCode = payloads.filter(p => !p.emp_code);
-  let importErr = null;
-  if(withCode.length){
-    const { error } = await sb.from('employees').upsert(withCode, { onConflict: 'emp_code' });
-    if(error) importErr = error;
-  }
-  if(withoutCode.length){
-    const { error } = await sb.from('employees').insert(withoutCode);
-    if(error) importErr = error;
-  }
-  if(importErr){ toast('Import failed: ' + importErr.message, true); return; }
-  toast(`Imported ${payloads.length} employees`);
-  renderEmployees();
-}
-
-function parseCSVLine(line){
-  // simple CSV parser handling quoted fields
-  const result = []; let cur=''; let inQuotes=false;
-  for(let i=0;i<line.length;i++){
-    const c = line[i];
-    if(c === '"'){ inQuotes = !inQuotes; }
-    else if(c === ',' && !inQuotes){ result.push(cur); cur=''; }
-    else { cur += c; }
-  }
-  result.push(cur);
-  return result.map(s=>s.trim());
-}
-
-/* ============================================================================
-   ATTENDANCE
-   ============================================================================ */
-function attendanceDayClass(status){
-  if(status.startsWith('Paid via Arrear')) return 'cal-arrear';
-  if(status.startsWith('Full Day')) return 'cal-full';
-  if(status.startsWith('Half Day')) return 'cal-half';
-  if(status.startsWith('Backfill Pending')) return 'cal-pending';
-  if(status.startsWith('Absent')) return 'cal-absent';
-  if(status.startsWith('Holiday')) return 'cal-holiday';
-  if(status.includes('Approved Leave') || status.startsWith('LWP')) return 'cal-leave';
-  if(status === 'Upcoming') return 'cal-upcoming';
-  return '';
-}
-
-function buildCalendarHTML(dayDetails, month, year){
-  const firstDow = new Date(year, month-1, 1).getDay(); // 0=Sun
-  const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  let cells = dowLabels.map(d=>`<div class="cal-dow">${d}</div>`).join('');
-  for(let i=0;i<firstDow;i++) cells += `<div></div>`;
-  dayDetails.forEach(d=>{
-    const dayNum = parseInt(d.date.slice(8,10));
-    cells += `<div class="cal-cell ${attendanceDayClass(d.status)}" title="${d.status}">
-      <div class="cal-day-num">${dayNum}</div>
-      <div>${d.status.length > 14 ? d.status.slice(0,13)+'…' : d.status}</div>
-    </div>`;
-  });
-  return `
-    <div class="cal-grid">${cells}</div>
-    <div class="cal-legend">
-      <span><i style="background:#e5f7ee;"></i> Full Day</span>
-      <span><i style="background:#fff8e6;"></i> Half Day</span>
-      <span><i style="background:#fdecea;"></i> Absent</span>
-      <span><i style="background:#e8eefc;"></i> Holiday</span>
-      <span><i style="background:#f3e8fc;"></i> Leave</span>
-      <span><i style="background:#fff4e5;"></i> Backfill Pending</span>
-      <span><i style="background:#eef2ff;"></i> Paid via Arrear</span>
-      <span><i style="background:#f2f5f9;"></i> Upcoming</span>
-    </div>
-  `;
-}
-
-// IMPORTANT: never use `date.toISOString().slice(0,10)` to get a "YYYY-MM-DD"
-// string from a local Date — toISOString() converts to UTC first, which
-// silently shifts the date backward by one day for any timezone ahead of UTC
-// (e.g. India, UTC+5:30) whenever the calculation touches local midnight.
-// This caused missing-days/holiday/leave date math to land on the wrong day.
-// Always use this local-component formatter instead.
-function localDateStr(d){
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
-}
-
-// Financial Year runs June through May. FY is identified by its starting
-// calendar year — e.g. June 2026 through May 2027 is FY "2026" (labeled "FY 2026-27").
-function fyStartYear(month, year){ return month >= 6 ? year : year - 1; }
-function currentFYStartYear(){ const now = new Date(); return fyStartYear(now.getMonth()+1, now.getFullYear()); }
-function fyLabel(fyYear){ return `FY ${fyYear}-${String(fyYear+1).slice(-2)}`; }
-function fyDateRange(fyYear){ return { start: `${fyYear}-06-01`, end: `${fyYear+1}-05-31` }; }
-
-function daysInMonth(month, year){ return new Date(year, month, 0).getDate(); }
-
-// Sundays and the 2nd Saturday of every month are holidays by default, even
-// with no row in the `holidays` table. Mirrors is_default_weekly_holiday()
-// in the database.
-function defaultWeeklyHolidayName(dateStr){
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = d.getDay(); // 0=Sun..6=Sat
-  if(dow === 0) return 'Sunday (Weekly Off)';
-  if(dow === 6){
-    const day = d.getDate();
-    if(day >= 8 && day <= 14) return '2nd Saturday (Weekly Off)';
-  }
-  return null;
-}
-function isDefaultWeeklyHoliday(dateStr){ return !!defaultWeeklyHolidayName(dateStr); }
-
-async function renderAttendance(){
-  const content = document.getElementById('view-content');
-  const now = new Date();
-  content.innerHTML = `
-    <div class="btn-row">
-      <select id="att-month" class="period-select" onchange="loadAttendanceView()">${MONTH_NAMES.slice(1).map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select>
-      <input type="number" id="att-year" class="period-input" style="width:90px" value="${now.getFullYear()}" onchange="loadAttendanceView()">
-      <button class="btn" onclick="markAllFullPay()">Mark all Full Pay</button>
-      <button class="btn" onclick="syncFromSelfAttendance()">Sync from Self-Attendance</button>
-      <button class="btn btn-primary" onclick="saveAttendanceAll()">Save Attendance</button>
-      <label class="btn" style="margin:0;">Import CSV<input type="file" accept=".csv" style="display:none" onchange="importAttendanceCSV(event)"></label>
-    </div>
-    <div class="card"><div id="attendance-table" class="table-wrap"></div></div>
-
-    <div class="card">
-      <div class="section-title">View Individual Employee Calendar</div>
-      <div class="btn-row">
-        <select id="cal-employee-select" class="period-select"></select>
-        <button class="btn" onclick="loadEmployeeCalendar()">View Calendar</button>
-      </div>
-      <div id="employee-calendar-view"></div>
-    </div>
-  `;
-  await loadAttendanceView();
-  const employees = (await loadEmployees()).filter(e=>e.status==='active');
-  document.getElementById('cal-employee-select').innerHTML = employees.map(e=>`<option value="${e.id}">${e.emp_code} — ${e.full_name}</option>`).join('');
-}
-
-async function loadEmployeeCalendar(){
-  const empId = document.getElementById('cal-employee-select').value;
-  if(!empId) return;
-  const month = parseInt(document.getElementById('att-month').value);
-  const year = parseInt(document.getElementById('att-year').value);
-  const summary = await computeMonthlyFromDaily(empId, month, year);
-  document.getElementById('employee-calendar-view').innerHTML = buildCalendarHTML(summary.dayDetails, month, year);
-}
-
-async function loadAttendanceView(){
-  const month = parseInt(document.getElementById('att-month').value);
-  const year = parseInt(document.getElementById('att-year').value);
-  const employees = (await loadEmployees()).filter(e=>e.status==='active');
-  const { data: existing } = await sb.from('attendance').select('*').eq('month', month).eq('year', year);
-  const attMap = {};
-  (existing||[]).forEach(a => attMap[a.employee_id] = a);
-
-  document.getElementById('attendance-table').innerHTML = '<p class="muted">Loading…</p>';
-
-  // For any employee with no saved snapshot yet for this month, default to
-  // what's actually recorded (self check-ins, approved leave, approved
-  // backfills, holidays) instead of silently assuming full pay. For
-  // employees that DO have a saved snapshot, still compute the current
-  // self-attendance figures so we can flag it if they've since diverged
-  // (e.g. a backfill got approved after this row was saved) — the saved
-  // values stay what's shown/editable, but a warning + one-click refresh
-  // appears instead of silently going stale.
-  const rows = await Promise.all(employees.map(async e => {
-    const saved = attMap[e.id];
-    const summary = await computeMonthlyFromDaily(e.id, month, year);
-    if(saved){
-      const stale = Number(saved.paid_days) !== summary.paidDays || Number(saved.lop_days) !== summary.lopDays;
-      return { e, total: saved.total_days, paid: saved.paid_days, lop: saved.lop_days, remarks: saved.remarks || '', stale, computed: summary };
-    }
-    return {
-      e, total: summary.totalDays, paid: summary.paidDays, lop: summary.lopDays,
-      remarks: summary.absentEquivalent > 0 ? `Unplanned absent: ${summary.absentEquivalent} day(s) (not yet saved)` : '',
-      stale: false, computed: summary
-    };
-  }));
-
-  document.getElementById('attendance-table').innerHTML = `
-    <table>
-      <thead><tr><th>Code</th><th>Name</th><th>Total Days</th><th>Paid Days</th><th>LOP Days</th><th>Remarks</th><th></th></tr></thead>
-      <tbody>
-        ${rows.map(({e, total, paid, lop, remarks, stale, computed})=>`
-          <tr data-emp="${e.id}" data-computed-total="${computed.totalDays}" data-computed-paid="${computed.paidDays}" data-computed-lop="${computed.lopDays}">
-            <td>${e.emp_code}</td>
-            <td>${e.full_name}</td>
-            <td><input class="tbl-input att-total" type="number" value="${total}"></td>
-            <td><input class="tbl-input att-paid" type="number" step="0.5" value="${paid}" onchange="syncLOP(this)"></td>
-            <td><input class="tbl-input att-lop" type="number" step="0.5" value="${lop}" onchange="syncPaid(this)"></td>
-            <td><input class="tbl-input att-remarks" style="width:160px" value="${remarks}"></td>
-            <td>${stale ? `<button class="btn btn-sm" title="Self-attendance now shows Paid ${computed.paidDays} / LOP ${computed.lopDays} — click to pull that in" onclick="refreshAttendanceRow(this)">⚠ Refresh</button>` : ''}</td>
-          </tr>`).join('') || '<tr><td colspan="7" class="muted">No active employees.</td></tr>'}
-      </tbody>
-    </table>
-  `;
-}
-
-function syncLOP(el){
-  const row = el.closest('tr');
-  const total = parseFloat(row.querySelector('.att-total').value)||0;
-  const paid = parseFloat(el.value)||0;
-  row.querySelector('.att-lop').value = Math.max(0, total - paid);
-}
-function syncPaid(el){
-  const row = el.closest('tr');
-  const total = parseFloat(row.querySelector('.att-total').value)||0;
-  const lop = parseFloat(el.value)||0;
-  row.querySelector('.att-paid').value = Math.max(0, total - lop);
-}
-
-function refreshAttendanceRow(btn){
-  const row = btn.closest('tr');
-  row.querySelector('.att-total').value = row.dataset.computedTotal;
-  row.querySelector('.att-paid').value = row.dataset.computedPaid;
-  row.querySelector('.att-lop').value = row.dataset.computedLop;
-  btn.closest('td').innerHTML = '';
-  toast('Row refreshed from self-attendance — remember to Save Attendance.');
-}
-function markAllFullPay(){
-  document.querySelectorAll('#attendance-table tr[data-emp]').forEach(row=>{
-    const total = parseFloat(row.querySelector('.att-total').value)||0;
-    row.querySelector('.att-paid').value = total;
-    row.querySelector('.att-lop').value = 0;
-  });
-}
-
-async function syncFromSelfAttendance(){
-  const month = parseInt(document.getElementById('att-month').value);
-  const year = parseInt(document.getElementById('att-year').value);
-  const rows = [...document.querySelectorAll('#attendance-table tr[data-emp]')];
-  if(!rows.length){ toast('No employees to sync.', true); return; }
-  for(const row of rows){
-    const empId = row.dataset.emp;
-    const summary = await computeMonthlyFromDaily(empId, month, year);
-    row.querySelector('.att-total').value = summary.totalDays;
-    row.querySelector('.att-paid').value = summary.paidDays;
-    row.querySelector('.att-lop').value = summary.lopDays;
-    row.querySelector('.att-remarks').value = `Approved CL (YTD): ${summary.clUsed}/${summary.clAvailable}`;
-  }
-  toast('Pulled from self-marked attendance — review, then Save Attendance.');
-}
-
-async function saveAttendanceAll(){
-  const month = parseInt(document.getElementById('att-month').value);
-  const year = parseInt(document.getElementById('att-year').value);
-  const rows = [...document.querySelectorAll('#attendance-table tr[data-emp]')].map(row=>({
-    employee_id: row.dataset.emp,
-    month, year,
-    total_days: parseFloat(row.querySelector('.att-total').value)||0,
-    paid_days: parseFloat(row.querySelector('.att-paid').value)||0,
-    lop_days: parseFloat(row.querySelector('.att-lop').value)||0,
-    remarks: row.querySelector('.att-remarks').value || null
-  }));
-  if(!rows.length){ toast('Nothing to save.', true); return; }
-  const { error } = await sb.from('attendance').upsert(rows, { onConflict: 'employee_id,month,year' });
-  if(error){ toast('Save failed: ' + error.message, true); return; }
-  toast('Attendance saved for ' + rows.length + ' employees');
-}
-
-async function importAttendanceCSV(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  const month = parseInt(document.getElementById('att-month').value);
-  const year = parseInt(document.getElementById('att-year').value);
-  const text = await file.text();
-  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const headers = lines[0].split(',').map(h=>h.trim());
-  const employees = await loadEmployees();
-  const byCode = {}; employees.forEach(e=>byCode[e.emp_code]=e.id);
-
-  const rows = lines.slice(1).map(line=>{
-    const cells = parseCSVLine(line);
-    const obj = {}; headers.forEach((h,i)=>obj[h]=cells[i]);
-    return obj;
-  }).filter(r=>byCode[r.emp_code]).map(r=>({
-    employee_id: byCode[r.emp_code],
-    month, year,
-    total_days: parseFloat(r.total_days || daysInMonth(month,year)),
-    paid_days: parseFloat(r.paid_days || 0),
-    lop_days: parseFloat(r.lop_days || 0),
-    remarks: r.remarks || null
-  }));
-
-  if(!rows.length){ toast('No matching employee codes found in CSV.', true); return; }
-  const { error } = await sb.from('attendance').upsert(rows, { onConflict: 'employee_id,month,year' });
-  if(error){ toast('Import failed: ' + error.message, true); return; }
-  toast(`Imported attendance for ${rows.length} employees`);
-  loadAttendanceView();
-}
-
-/* ============================================================================
-   PAYROLL CALCULATION ENGINE
-   ============================================================================ */
-function calcPT(earnedGross, month){
-  const slabs = SETTINGS.pt_slabs_ap || [];
-  let amount = 0;
-  for(const slab of slabs){
-    const min = slab.min ?? 0;
-    const max = slab.max === null || slab.max === undefined ? Infinity : slab.max;
-    if(earnedGross >= min && earnedGross <= max){ amount = slab.amount; break; }
-  }
-  const marchExtra = SETTINGS.pt_march_extra || {};
-  if(month === 3 && marchExtra.enabled && amount > 0){ amount = marchExtra.amount; }
-  return amount;
-}
-
-function computePayslip(employee, attendance, arrearsAmount){
-  arrearsAmount = Number(arrearsAmount) || 0;
-  const basic = Number(employee.basic)||0;
-  const hra = Number(employee.hra)||0;
-  const allowances = sumAllowances(employee.allowances);
-  const gross = basic + hra + allowances;
-
-  const totalDays = attendance?.total_days || 30;
-  const paidDays = attendance?.paid_days ?? totalDays;
-  const ratio = totalDays > 0 ? (paidDays / totalDays) : 1;
-
-  const earnedGross = round2(gross * ratio);
-  const earnedBasic = round2(basic * ratio);
-
-  const pfCfg = SETTINGS.pf || { employee_rate:12, employer_rate:12, wage_ceiling:15000 };
-  const esiCfg = SETTINGS.esi || { employee_rate:0.75, employer_rate:3.25, wage_ceiling:21000 };
-
-  let pfEmployee = 0, pfEmployer = 0;
-  if(employee.pf_applicable){
-    // PF stays on earned Basic only — arrears here are a lump gross top-up
-    // with no basic/HRA split of their own, so there's nothing meaningful
-    // to run PF on. (If you later want PF on arrears too, arrears would
-    // need their own basic/allowance breakdown at creation time.)
-    const pfWage = Math.min(earnedBasic, pfCfg.wage_ceiling);
-    pfEmployee = round2(pfWage * pfCfg.employee_rate / 100);
-    pfEmployer = round2(pfWage * pfCfg.employer_rate / 100);
-  }
-
-  // ESI is contribution-linked to actual wages PAID this cycle. Arrears paid
-  // out in this run are real wages this month, so they belong in the ESI
-  // wage base — both for the ceiling-eligibility check and the contribution
-  // itself. (Professional Tax intentionally stays on earnedGross alone —
-  // AP PT slabs are keyed to the regular monthly salary bracket, not a
-  // one-off catch-up payment; revisit if your state's rule differs.)
-  const esiWageBase = round2(earnedGross + arrearsAmount);
-  let esiEmployee = 0, esiEmployer = 0;
-  if(employee.esi_applicable && esiWageBase <= esiCfg.wage_ceiling){
-    esiEmployee = round2(esiWageBase * esiCfg.employee_rate / 100);
-    esiEmployer = round2(esiWageBase * esiCfg.employer_rate / 100);
-  }
-
-  const pt = calcPT(earnedGross, attendanceMonthOf(attendance));
-  const netPay = round2(earnedGross + arrearsAmount - pfEmployee - esiEmployee - pt);
-
-  return {
-    gross, earnedGross, earnedBasic, paidDays, totalDays,
-    pfEmployee, pfEmployer, esiEmployee, esiEmployer, esiWageBase, pt, netPay,
-    breakdown: { basic, hra, allowances, gross, earnedGross, paidDays, totalDays, pfEmployee, pfEmployer, esiEmployee, esiEmployer, esiWageBase, pt, netPay }
-  };
-}
-
-function attendanceMonthOf(attendance){ return attendance?.month || (new Date()).getMonth()+1; }
-function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
-
-/* ============================================================================
-   PAYROLL RUN VIEW
-   ============================================================================ */
-async function renderPayroll(){
-  const content = document.getElementById('view-content');
-  const now = new Date();
-  content.innerHTML = `
-    <div class="btn-row">
-      <select id="run-month" class="period-select">${MONTH_NAMES.slice(1).map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select>
-      <input type="number" id="run-year" class="period-input" style="width:90px" value="${now.getFullYear()}">
-      <button class="btn btn-primary" onclick="runPayrollPreview()">Preview / Run Payroll</button>
-    </div>
-    <div class="card"><div id="payroll-preview">
-      <p class="muted">Select a month and click "Preview / Run Payroll" to calculate salaries based on saved attendance.</p>
-    </div></div>
-    <div class="card">
-      <div class="section-title">Pending Arrears Queue</div>
-      <p class="muted">These will be pulled into whichever month you next preview and save — not necessarily the month shown above. Only counted as paid once you actually click "Save as Draft" on that run (previewing alone never consumes them).</p>
-      <div id="pending-arrears-list"><p class="muted">Loading…</p></div>
-      ${can('admin','accountant') ? `<button class="btn btn-sm" style="margin-top:10px;" onclick="toggleReconcileArrears()">Reconcile Arrears (view all / fix a stuck one)</button>` : ''}
-      <div id="reconcile-arrears-panel" style="display:none;margin-top:10px;"></div>
-    </div>
-  `;
-  loadPendingArrearsList();
-}
-
-async function loadPendingArrearsList(){
-  const { data: arrears } = await sb.from('arrears').select('*, employees(emp_code, full_name)').eq('status','pending').order('created_at',{ascending:false});
-  const el = document.getElementById('pending-arrears-list');
-  if(!el) return;
-  el.innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr><th>Code</th><th>Name</th><th>Amount</th><th>Reason</th><th>Queued</th></tr></thead>
-      <tbody>
-        ${(arrears||[]).map(a=>`<tr><td>${a.employees.emp_code}</td><td>${a.employees.full_name}</td><td>₹${Number(a.amount).toLocaleString('en-IN')}</td><td>${a.reason}</td><td>${new Date(a.created_at).toLocaleDateString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No pending arrears.</td></tr>'}
-      </tbody>
-    </table></div>
-  `;
-}
-
-async function toggleReconcileArrears(){
-  const panel = document.getElementById('reconcile-arrears-panel');
-  if(panel.style.display === 'none'){
-    panel.style.display = 'block';
-    await loadReconcilePanel();
-  } else {
-    panel.style.display = 'none';
-  }
-}
-
-async function loadReconcilePanel(){
-  const panel = document.getElementById('reconcile-arrears-panel');
-  panel.innerHTML = '<p class="muted">Loading…</p>';
-  const { data: arrears } = await sb.from('arrears').select('*, employees(emp_code, full_name)').order('created_at',{ascending:false});
-  const { data: runs } = await sb.from('payroll_runs').select('id,month,year').order('year',{ascending:false}).order('month',{ascending:false});
-
-  panel.innerHTML = `
-    <p class="muted">Every arrear ever created, whatever its status. If one is stuck "pending" for longer than expected (e.g. reappearing every month at the same amount), that's the RLS/permission failure this tool exists to fix — mark it applied to whichever run actually paid it, or cancel it if it's a duplicate.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Code</th><th>Name</th><th>Amount</th><th>Reason</th><th>Status</th><th>Applied To</th><th></th></tr></thead>
-      <tbody>
-        ${(arrears||[]).map(a=>{
-          const appliedRun = (runs||[]).find(r=>r.id===a.applied_payroll_run_id);
-          return `<tr>
-            <td>${a.employees.emp_code}</td><td>${a.employees.full_name}</td>
-            <td>₹${Number(a.amount).toLocaleString('en-IN')}</td><td>${a.reason}</td>
-            <td><span class="badge badge-${a.status==='applied'?'active':a.status==='cancelled'?'terminated':'inactive'}">${a.status}</span></td>
-            <td>${appliedRun ? MONTH_NAMES[appliedRun.month]+' '+appliedRun.year : '—'}</td>
-            <td>
-              ${a.status !== 'applied' ? `<select id="reconcile-run-${a.id}" class="tbl-input" style="width:auto;">
-                <option value="">Mark applied to…</option>
-                ${(runs||[]).map(r=>`<option value="${r.id}">${MONTH_NAMES[r.month]} ${r.year}</option>`).join('')}
-              </select> <button class="btn btn-sm" onclick="reconcileMarkApplied('${a.id}')">Go</button>` : ''}
-              ${a.status !== 'pending' ? `<button class="btn btn-sm btn-danger" onclick="reconcileMarkPending('${a.id}')">Reset to Pending</button>` : ''}
-              ${a.status === 'pending' ? `<button class="btn btn-sm btn-danger" onclick="reconcileCancel('${a.id}')">Cancel</button>` : ''}
-            </td>
-          </tr>`;
-        }).join('') || '<tr><td colspan="7" class="muted">No arrears at all yet.</td></tr>'}
-      </tbody>
-    </table></div>
-  `;
-}
-
-async function reconcileMarkApplied(id){
-  const sel = document.getElementById(`reconcile-run-${id}`);
-  const runId = sel ? sel.value : '';
-  if(!runId){ toast('Pick which run to link it to.', true); return; }
-  const { error } = await sb.from('arrears').update({ status:'applied', applied_payroll_run_id: runId }).eq('id', id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-  toast('Arrear marked applied');
-  loadReconcilePanel();
-  loadPendingArrearsList();
-}
-
-async function reconcileMarkPending(id){
-  if(!confirm('Reset this arrear to pending? It will be included again in the next payroll run you save.')) return;
-  const { error } = await sb.from('arrears').update({ status:'pending', applied_payroll_run_id: null }).eq('id', id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-  toast('Arrear reset to pending');
-  loadReconcilePanel();
-  loadPendingArrearsList();
-}
-
-async function reconcileCancel(id){
-  if(!confirm('Cancel this arrear? It will never be paid out.')) return;
-  const { error } = await sb.from('arrears').update({ status:'cancelled' }).eq('id', id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-  toast('Arrear cancelled');
-  loadReconcilePanel();
-  loadPendingArrearsList();
-}
-
-let LAST_PREVIEW = null;
-
-async function runPayrollPreview(){
-  const month = parseInt(document.getElementById('run-month').value);
-  const year = parseInt(document.getElementById('run-year').value);
-  const employees = (await loadEmployees()).filter(e=>e.status==='active');
-  const { data: attendanceRows } = await sb.from('attendance').select('*').eq('month', month).eq('year', year);
-  const attMap = {}; (attendanceRows||[]).forEach(a=>attMap[a.employee_id]=a);
-
-  const { data: pendingArrears } = await sb.from('arrears').select('*').eq('status','pending');
-  const arrearsByEmployee = {};
-  (pendingArrears||[]).forEach(a => {
-    (arrearsByEmployee[a.employee_id] = arrearsByEmployee[a.employee_id] || []).push(a);
-  });
-
-  const results = await Promise.all(employees.map(async e => {
-    let att = attMap[e.id];
-    let unsynced = false;
-    if(!att){
-      // No admin-saved snapshot for this month — don't silently assume full
-      // pay; compute live from self-attendance (check-ins, approved leave,
-      // approved backfills, holidays) the same way the Attendance tab does.
-      const summary = await computeMonthlyFromDaily(e.id, month, year);
-      att = { total_days: summary.totalDays, paid_days: summary.paidDays, lop_days: summary.lopDays, month };
-      unsynced = true;
-    }
-    const empArrears = arrearsByEmployee[e.id] || [];
-    const arrearsAmount = round2(empArrears.reduce((s,a)=>s+Number(a.amount),0));
-    const calc = computePayslip(e, att, arrearsAmount);
-    calc.unsynced = unsynced;
-    calc.arrearsAmount = arrearsAmount;
-    calc.arrearsIds = empArrears.map(a=>a.id);
-    calc.arrearsReasons = empArrears.map(a=>a.reason);
-    calc.breakdown.arrearsAmount = arrearsAmount;
-    calc.breakdown.arrearsReasons = calc.arrearsReasons;
-    return { employee: e, calc };
-  }));
-
-  LAST_PREVIEW = { month, year, results };
-
-  const totalGross = results.reduce((s,r)=>s+r.calc.earnedGross,0);
-  const totalNet = results.reduce((s,r)=>s+r.calc.netPay,0);
-  const totalPF = results.reduce((s,r)=>s+r.calc.pfEmployee,0);
-  const totalESI = results.reduce((s,r)=>s+r.calc.esiEmployee,0);
-  const totalPT = results.reduce((s,r)=>s+r.calc.pt,0);
-  const totalArrears = results.reduce((s,r)=>s+r.calc.arrearsAmount,0);
-
-  document.getElementById('payroll-preview').innerHTML = `
-    <div class="grid-kpi" style="margin-bottom:14px;">
-      <div class="kpi"><div class="label">Employees</div><div class="value">${results.length}</div></div>
-      <div class="kpi"><div class="label">Gross</div><div class="value">₹${totalGross.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-      <div class="kpi"><div class="label">PF+ESI+PT</div><div class="value">₹${(totalPF+totalESI+totalPT).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-      <div class="kpi"><div class="label">Arrears</div><div class="value">₹${totalArrears.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-      <div class="kpi"><div class="label">Net Payout</div><div class="value">₹${totalNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-    </div>
-    ${totalArrears > 0 ? `<p class="muted">Arrears above come from approved attendance backfills whose original month was already finalized — see the row-level tooltip for the reason.</p>` : ''}
-    <div class="table-wrap"><table>
-      <thead><tr><th>Code</th><th>Name</th><th>Earned Gross</th><th>PF</th><th>ESI</th><th>PT</th><th>Arrears</th><th>Net Pay</th></tr></thead>
-      <tbody>
-        ${results.map(r=>`
-          <tr>
-            <td>${r.employee.emp_code}</td>
-            <td>${r.employee.full_name}</td>
-            <td>₹${r.calc.earnedGross.toLocaleString('en-IN')}</td>
-            <td>₹${r.calc.pfEmployee.toLocaleString('en-IN')}</td>
-            <td>₹${r.calc.esiEmployee.toLocaleString('en-IN')}</td>
-            <td>₹${r.calc.pt.toLocaleString('en-IN')}</td>
-            <td title="${r.calc.arrearsReasons.join(' | ')}">${r.calc.arrearsAmount ? '₹'+r.calc.arrearsAmount.toLocaleString('en-IN') : '—'}</td>
-            <td><strong>₹${r.calc.netPay.toLocaleString('en-IN')}</strong></td>
-          </tr>`).join('')}
-      </tbody>
-    </table></div>
-    <div class="btn-row" style="margin-top:16px;">
-      <button class="btn btn-primary" onclick="confirmSavePayrollRun()">Save as Draft</button>
-    </div>
-  `;
-}
-
-async function confirmSavePayrollRun(){
-  if(!LAST_PREVIEW){ toast('Run a preview first.', true); return; }
-  const { month, year, results } = LAST_PREVIEW;
-
-  let { data: run, error: runErr } = await sb.from('payroll_runs')
-    .select('*').eq('month', month).eq('year', year).maybeSingle();
-
-  if(run && run.status === 'finalized'){
-    toast(`${MONTH_NAMES[month]} ${year} is already finalized and can't be overwritten. Any pending arrears for this employee will be picked up the next time you run a later month's payroll.`, true);
-    return;
-  }
-
-  if(!run){
-    ({ data: run, error: runErr } = await sb.from('payroll_runs')
-      .insert({ month, year, status:'draft', created_by: CURRENT_PROFILE.id })
-      .select().single());
-  }
-  if(runErr){ toast('Could not create payroll run: ' + runErr.message, true); return; }
-
-  const payslipRows = results.map(r => ({
-    payroll_run_id: run.id,
-    employee_id: r.employee.id,
-    gross: r.calc.gross,
-    earned_gross: r.calc.earnedGross,
-    pf_employee: r.calc.pfEmployee,
-    pf_employer: r.calc.pfEmployer,
-    esi_employee: r.calc.esiEmployee,
-    esi_employer: r.calc.esiEmployer,
-    professional_tax: r.calc.pt,
-    other_deductions: 0,
-    arrears_amount: r.calc.arrearsAmount,
-    net_pay: r.calc.netPay,
-    breakdown: r.calc.breakdown
-  }));
-
-  const { error: slipErr } = await sb.from('payslips').upsert(payslipRows, { onConflict: 'payroll_run_id,employee_id' });
-  if(slipErr){ toast('Could not save payslips: ' + slipErr.message, true); return; }
-
-  const allArrearIds = results.flatMap(r => r.calc.arrearsIds);
-  let arrearErrMsg = '';
-  if(allArrearIds.length){
-    // IMPORTANT: a Postgres/RLS update that matches 0 rows does NOT return an
-    // error — it just silently updates nothing. That's almost certainly why
-    // an arrear can reappear at the same amount every month: this call
-    // "succeeded" but never actually flipped the row to 'applied'. So we
-    // verify the returned row count, not just the absence of an error.
-    const { data: updatedArrears, error: arrearErr } = await sb.from('arrears')
-      .update({ status: 'applied', applied_payroll_run_id: run.id })
-      .in('id', allArrearIds)
-      .select('id');
-    const updatedCount = updatedArrears ? updatedArrears.length : 0;
-    if(arrearErr || updatedCount !== allArrearIds.length){
-      const failedCount = allArrearIds.length - updatedCount;
-      arrearErrMsg = ` — WARNING: ${failedCount} of ${allArrearIds.length} arrear(s) could not be marked applied (${arrearErr ? arrearErr.message : 'permission or match issue'}) and will reappear next run. Use "Reconcile Arrears" on the Payroll Run page to fix.`;
-    }
-  }
-
-  toast(`Payroll run saved as draft (${payslipRows.length} payslips)` + (allArrearIds.length && !arrearErrMsg ? `, ${allArrearIds.length} arrear(s) applied` : arrearErrMsg), !!arrearErrMsg);
-  switchView('payslips');
-  setTimeout(()=>loadRunIntoPayslips(run.id), 100);
-}
-
-/* ============================================================================
-   PAYSLIPS VIEW
-   ============================================================================ */
-async function renderPayslips(){
-  const content = document.getElementById('view-content');
-  const { data: runs } = await sb.from('payroll_runs').select('*').order('year',{ascending:false}).order('month',{ascending:false});
-  content.innerHTML = `
-    <div class="btn-row">
-      <select id="payslip-run-select" class="period-select" onchange="loadRunIntoPayslips(this.value)">
-        <option value="">Select a payroll run…</option>
-        ${(runs||[]).map(r=>`<option value="${r.id}">${MONTH_NAMES[r.month]} ${r.year} — ${r.status}</option>`).join('')}
-      </select>
-      <button class="btn" id="finalize-btn" style="display:none;" onclick="finalizeRun()">Finalize Run</button>
-      <button class="btn btn-danger" id="reopen-btn" style="display:none;" onclick="reopenRun()">Reopen for Editing</button>
-      <button class="btn" onclick="exportRunCSV()" id="export-run-btn" style="display:none;">Export CSV</button>
-    </div>
-    <div class="card"><div id="payslip-run-table"><p class="muted">Choose a payroll run above.</p></div></div>
-  `;
-}
-
-let CURRENT_RUN = null;
-let CURRENT_RUN_SLIPS = [];
-
-async function loadRunIntoPayslips(runId){
-  if(!runId) return;
-  document.getElementById('payslip-run-select').value = runId;
-  const { data: run } = await sb.from('payroll_runs').select('*').eq('id', runId).single();
-  const { data: slips } = await sb.from('payslips').select('*, employees(emp_code, full_name, designation, user_id)').eq('payroll_run_id', runId);
-  CURRENT_RUN = run;
-  CURRENT_RUN_SLIPS = slips || [];
-
-  document.getElementById('finalize-btn').style.display = (run.status==='draft' && can('admin')) ? 'inline-block' : 'none';
-  document.getElementById('reopen-btn').style.display = (run.status==='finalized' && can('admin')) ? 'inline-block' : 'none';
-  document.getElementById('export-run-btn').style.display = 'inline-block';
-
-  document.getElementById('payslip-run-table').innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr><th>Code</th><th>Name</th><th>Gross</th><th>PF</th><th>ESI</th><th>PT</th><th>Net Pay</th><th></th></tr></thead>
-      <tbody>
-        ${CURRENT_RUN_SLIPS.map(s=>`
-          <tr>
-            <td>${s.employees.emp_code}</td>
-            <td>${s.employees.full_name}</td>
-            <td>₹${Number(s.earned_gross).toLocaleString('en-IN')}</td>
-            <td>₹${Number(s.pf_employee).toLocaleString('en-IN')}</td>
-            <td>₹${Number(s.esi_employee).toLocaleString('en-IN')}</td>
-            <td>₹${Number(s.professional_tax).toLocaleString('en-IN')}</td>
-            <td><strong>₹${Number(s.net_pay).toLocaleString('en-IN')}</strong></td>
-            <td><button class="btn btn-sm" onclick="viewPayslip('${s.id}')">View</button></td>
-          </tr>`).join('') || '<tr><td colspan="8" class="muted">No payslips in this run.</td></tr>'}
-      </tbody>
-    </table></div>
-  `;
-}
-
-async function finalizeRun(){
-  if(!CURRENT_RUN) return;
-  if(!confirm('Finalize this payroll run? It will be locked from further edits.')) return;
-  const { error } = await sb.from('payroll_runs').update({ status:'finalized', finalized_at: new Date().toISOString() }).eq('id', CURRENT_RUN.id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-
-  const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
-  CURRENT_RUN_SLIPS.forEach(s => {
-    if(s.employees.user_id) notifyUser(s.employees.user_id, `Your payslip for ${monthLabel} is now available.`, 'payroll');
-  });
-
-  toast('Payroll run finalized');
-  loadRunIntoPayslips(CURRENT_RUN.id);
-}
-
-async function reopenRun(){
-  if(!CURRENT_RUN) return;
-  const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
-
-  const { data: sourcedArrears } = await sb.from('arrears').select('amount,status').eq('source_month', CURRENT_RUN.month).eq('source_year', CURRENT_RUN.year).neq('status','cancelled');
-  const arrearNote = (sourcedArrears && sourcedArrears.length)
-    ? `\n\nHeads up: ${sourcedArrears.length} backfill-driven arrear(s) totaling ₹${sourcedArrears.reduce((s,a)=>s+Number(a.amount),0).toLocaleString('en-IN')} came from backfilled days in THIS month. When you re-save this run, those specific days are automatically excluded from this month's own pay (they're compensated via the arrear instead), so re-saving won't double-pay them. If you meant to have those days paid directly in this month instead, cancel the corresponding arrear(s) first via Reconcile Arrears.`
-    : '';
-
-  const ok = confirm(
-    `Reopen ${monthLabel} for editing?\n\n` +
-    `This sets it back to "draft" so you can re-run Payroll Run and Save as Draft again. ` +
-    `Employees may have already seen the old payslip and any "payslip available" notification already sent won't be un-sent.` +
-    arrearNote +
-    `\n\nReopen anyway?`
-  );
-  if(!ok) return;
-
-  const { error } = await sb.from('payroll_runs').update({ status:'draft', finalized_at: null }).eq('id', CURRENT_RUN.id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-
-  toast(`${monthLabel} reopened — go to Payroll Run to recalculate and save.`);
-  loadRunIntoPayslips(CURRENT_RUN.id);
-}
-
-function exportRunCSV(){
-  if(!CURRENT_RUN_SLIPS.length){ toast('Nothing to export.', true); return; }
-  const headers = ['emp_code','full_name','gross','earned_gross','pf_employee','pf_employer','esi_employee','esi_employer','professional_tax','net_pay'];
-  const rows = CURRENT_RUN_SLIPS.map(s=>[s.employees.emp_code,s.employees.full_name,s.gross,s.earned_gross,s.pf_employee,s.pf_employer,s.esi_employee,s.esi_employer,s.professional_tax,s.net_pay]);
-  downloadCSV(`payroll_${CURRENT_RUN.month}_${CURRENT_RUN.year}.csv`, headers, rows);
-}
-
-function renderPayslipHTML(monthLabel, empName, empCode, empDesignation, b){
-  const schoolName = SETTINGS.school_name || 'Friends Vidyanikethan School';
-  return `
-    <div class="payslip">
-      <h2>${schoolName}</h2>
-      <div class="muted-sub">Payslip for ${monthLabel}</div>
-      <table style="width:100%;margin-bottom:14px;">
-        <tr><td><strong>${empName}</strong></td><td style="text-align:right;">Emp Code: ${empCode}</td></tr>
-        <tr><td>${empDesignation||''}</td><td style="text-align:right;">Paid Days: ${b.paidDays} / ${b.totalDays}</td></tr>
-      </table>
-      <table style="width:100%;">
-        <tr><td>Basic</td><td style="text-align:right;">₹${Number(b.basic).toLocaleString('en-IN')}</td></tr>
-        <tr><td>HRA</td><td style="text-align:right;">₹${Number(b.hra).toLocaleString('en-IN')}</td></tr>
-        <tr><td>Other Allowances</td><td style="text-align:right;">₹${Number(b.allowances).toLocaleString('en-IN')}</td></tr>
-        <tr><td>Gross (full month)</td><td style="text-align:right;">₹${Number(b.gross).toLocaleString('en-IN')}</td></tr>
-        <tr><td><strong>Earned Gross</strong></td><td style="text-align:right;"><strong>₹${Number(b.earnedGross).toLocaleString('en-IN')}</strong></td></tr>
-        ${b.arrearsAmount ? `<tr><td>Arrears${b.arrearsReasons && b.arrearsReasons.length ? ' <span class="muted" style="font-size:11px;">(' + b.arrearsReasons.join('; ') + ')</span>' : ''}</td><td style="text-align:right;">+ ₹${Number(b.arrearsAmount).toLocaleString('en-IN')}</td></tr>` : ''}
-        <tr><td colspan="2">&nbsp;</td></tr>
-        <tr><td>PF (Employee)</td><td style="text-align:right;">− ₹${Number(b.pfEmployee).toLocaleString('en-IN')}</td></tr>
-        <tr><td>ESI (Employee)</td><td style="text-align:right;">− ₹${Number(b.esiEmployee).toLocaleString('en-IN')}</td></tr>
-        <tr><td>Professional Tax</td><td style="text-align:right;">− ₹${Number(b.pt).toLocaleString('en-IN')}</td></tr>
-        <tr class="totals-row"><td>Net Pay</td><td style="text-align:right;">₹${Number(b.netPay).toLocaleString('en-IN')}</td></tr>
-      </table>
-      <p class="muted" style="margin-top:16px;">Employer contribution — PF: ₹${Number(b.pfEmployer).toLocaleString('en-IN')}, ESI: ₹${Number(b.esiEmployer).toLocaleString('en-IN')} (not deducted from employee)</p>
-      <p class="muted">This is a computer-generated payslip.</p>
-    </div>
-  `;
-}
-
-function viewPayslip(slipId){
-  const s = CURRENT_RUN_SLIPS.find(x=>x.id===slipId);
-  if(!s) return;
-  const monthLabel = `${MONTH_NAMES[CURRENT_RUN.month]} ${CURRENT_RUN.year}`;
-  document.getElementById('print-area').innerHTML = renderPayslipHTML(monthLabel, s.employees.full_name, s.employees.emp_code, s.employees.designation, s.breakdown);
-  document.getElementById('payslip-modal').classList.add('show');
-}
-
-/* ============================================================================
-   REPORTS
-   ============================================================================ */
-async function renderReports(){
-  const content = document.getElementById('view-content');
-  const now = new Date();
-  content.innerHTML = `
-    <div class="btn-row">
-      <select id="report-month" class="period-select">${MONTH_NAMES.slice(1).map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select>
-      <input type="number" id="report-year" class="period-input" style="width:90px" value="${now.getFullYear()}">
-      <button class="btn btn-primary" onclick="loadReportForMonthYear()">Load Report</button>
-    </div>
-    <div id="report-content"></div>
-  `;
-}
-
-async function loadReportForMonthYear(){
-  const month = parseInt(document.getElementById('report-month').value);
-  const year = parseInt(document.getElementById('report-year').value);
-  const { data: run } = await sb.from('payroll_runs').select('id').eq('month', month).eq('year', year).maybeSingle();
-  if(!run){
-    document.getElementById('report-content').innerHTML = `<div class="card muted">No payroll run exists for ${MONTH_NAMES[month]} ${year} yet.</div>`;
-    return;
-  }
-  loadReportForRun(run.id);
-}
-
-async function loadReportForRun(runId){
-  if(!runId){ document.getElementById('report-content').innerHTML=''; return; }
-  const { data: run } = await sb.from('payroll_runs').select('*').eq('id', runId).single();
-  const { data: slips } = await sb.from('payslips').select('*, employees(emp_code, full_name, designation, department, bank_name, bank_account_no, ifsc_code)').eq('payroll_run_id', runId);
-
-  const pfRows = (slips||[]).filter(s=>Number(s.pf_employee)>0 || Number(s.pf_employer)>0);
-  const esiRows = (slips||[]).filter(s=>Number(s.esi_employee)>0 || Number(s.esi_employer)>0);
-  const ptRows = (slips||[]).filter(s=>Number(s.professional_tax)>0);
-
-  const totalPF = pfRows.reduce((s,r)=>s+Number(r.pf_employee)+Number(r.pf_employer),0);
-  const totalESI = esiRows.reduce((s,r)=>s+Number(r.esi_employee)+Number(r.esi_employer),0);
-  const totalPT = ptRows.reduce((s,r)=>s+Number(r.professional_tax),0);
-  const totalGross = (slips||[]).reduce((s,r)=>s+Number(r.earned_gross),0);
-  const totalNet = (slips||[]).reduce((s,r)=>s+Number(r.net_pay),0);
-
-  // Department-wise breakdown for the management report
-  const byDept = {};
-  (slips||[]).forEach(s=>{
-    const dept = s.employees.department || 'Unassigned';
-    if(!byDept[dept]) byDept[dept] = { count:0, gross:0, net:0, pf:0, esi:0, pt:0 };
-    byDept[dept].count++;
-    byDept[dept].gross += Number(s.earned_gross);
-    byDept[dept].net += Number(s.net_pay);
-    byDept[dept].pf += Number(s.pf_employee)+Number(s.pf_employer);
-    byDept[dept].esi += Number(s.esi_employee)+Number(s.esi_employer);
-    byDept[dept].pt += Number(s.professional_tax);
-  });
-
-  document.getElementById('report-content').innerHTML = `
-    <div class="card">
-      <div class="section-title">Salary Register — ${MONTH_NAMES[run.month]} ${run.year} (${(slips||[]).length} employees)</div>
-      <div class="btn-row"><button class="btn btn-sm" onclick='exportReport(${JSON.stringify((slips||[]).map(s=>[s.employees.emp_code,s.employees.full_name,s.employees.designation||'',s.employees.department||'',s.gross,s.earned_gross,s.pf_employee,s.pf_employer,s.esi_employee,s.esi_employer,s.professional_tax,s.net_pay,s.employees.bank_name||'',s.employees.bank_account_no||'',s.employees.ifsc_code||'']))}, ["emp_code","name","designation","department","gross","earned_gross","pf_employee","pf_employer","esi_employee","esi_employer","pt","net_pay","bank_name","bank_account_no","ifsc_code"], "salary_register_${run.month}_${run.year}.csv")'>Export Salary Register (CSV)</button>
-      <button class="btn btn-sm" onclick='exportReport(${JSON.stringify((slips||[]).map(s=>[s.employees.emp_code,s.employees.full_name,s.employees.bank_name||'',s.employees.bank_account_no||'',s.employees.ifsc_code||'',s.net_pay]))}, ["emp_code","name","bank_name","bank_account_no","ifsc_code","net_pay"], "bank_transfer_${run.month}_${run.year}.csv")'>Export Bank Transfer Report (CSV)</button></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Code</th><th>Name</th><th>Dept</th><th>Gross</th><th>Earned Gross</th><th>PF (Emp)</th><th>PF (Empr)</th><th>ESI (Emp)</th><th>ESI (Empr)</th><th>PT</th><th>Net Pay</th></tr></thead>
-        <tbody>${(slips||[]).map(s=>`<tr>
-          <td>${s.employees.emp_code}</td><td>${s.employees.full_name}</td><td>${s.employees.department||''}</td>
-          <td>₹${Number(s.gross).toLocaleString('en-IN')}</td><td>₹${Number(s.earned_gross).toLocaleString('en-IN')}</td>
-          <td>₹${Number(s.pf_employee).toLocaleString('en-IN')}</td><td>₹${Number(s.pf_employer).toLocaleString('en-IN')}</td>
-          <td>₹${Number(s.esi_employee).toLocaleString('en-IN')}</td><td>₹${Number(s.esi_employer).toLocaleString('en-IN')}</td>
-          <td>₹${Number(s.professional_tax).toLocaleString('en-IN')}</td><td><strong>₹${Number(s.net_pay).toLocaleString('en-IN')}</strong></td>
-        </tr>`).join('') || '<tr><td colspan="11" class="muted">No payslips in this run.</td></tr>'}</tbody>
-      </table></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Management Report — Department-wise</div>
-      <div class="grid-kpi">
-        <div class="kpi"><div class="label">Total Gross</div><div class="value">₹${totalGross.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-        <div class="kpi"><div class="label">Total Net Paid</div><div class="value">₹${totalNet.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-        <div class="kpi"><div class="label">Total PF</div><div class="value">₹${totalPF.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-        <div class="kpi"><div class="label">Total ESI</div><div class="value">₹${totalESI.toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Department</th><th>Employees</th><th>Gross</th><th>Net</th><th>PF</th><th>ESI</th><th>PT</th></tr></thead>
-        <tbody>${Object.entries(byDept).map(([dept,d])=>`<tr><td>${dept}</td><td>${d.count}</td><td>₹${d.gross.toLocaleString('en-IN')}</td><td>₹${d.net.toLocaleString('en-IN')}</td><td>₹${d.pf.toLocaleString('en-IN')}</td><td>₹${d.esi.toLocaleString('en-IN')}</td><td>₹${d.pt.toLocaleString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No data.</td></tr>'}</tbody>
-      </table></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">PF Challan — Total ₹${totalPF.toLocaleString('en-IN')}</div>
-      <div class="btn-row"><button class="btn btn-sm" onclick='exportReport(${JSON.stringify(pfRows.map(r=>[r.employees.emp_code,r.employees.full_name,r.pf_employee,r.pf_employer]))}, ["emp_code","name","pf_employee","pf_employer"], "pf_challan_${run.month}_${run.year}.csv")'>Export CSV</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Employee</th><th>Employer</th></tr></thead>
-      <tbody>${pfRows.map(r=>`<tr><td>${r.employees.emp_code}</td><td>${r.employees.full_name}</td><td>₹${Number(r.pf_employee).toLocaleString('en-IN')}</td><td>₹${Number(r.pf_employer).toLocaleString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No PF-applicable employees.</td></tr>'}</tbody></table></div>
-    </div>
-    <div class="card">
-      <div class="section-title">ESI Report — Total ₹${totalESI.toLocaleString('en-IN')}</div>
-      <div class="btn-row"><button class="btn btn-sm" onclick='exportReport(${JSON.stringify(esiRows.map(r=>[r.employees.emp_code,r.employees.full_name,r.esi_employee,r.esi_employer]))}, ["emp_code","name","esi_employee","esi_employer"], "esi_report_${run.month}_${run.year}.csv")'>Export CSV</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Employee</th><th>Employer</th></tr></thead>
-      <tbody>${esiRows.map(r=>`<tr><td>${r.employees.emp_code}</td><td>${r.employees.full_name}</td><td>₹${Number(r.esi_employee).toLocaleString('en-IN')}</td><td>₹${Number(r.esi_employer).toLocaleString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No ESI-applicable employees.</td></tr>'}</tbody></table></div>
-    </div>
-    <div class="card">
-      <div class="section-title">Professional Tax Summary — Total ₹${totalPT.toLocaleString('en-IN')}</div>
-      <div class="btn-row"><button class="btn btn-sm" onclick='exportReport(${JSON.stringify(ptRows.map(r=>[r.employees.emp_code,r.employees.full_name,r.professional_tax]))}, ["emp_code","name","professional_tax"], "pt_report_${run.month}_${run.year}.csv")'>Export CSV</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>PT Amount</th></tr></thead>
-      <tbody>${ptRows.map(r=>`<tr><td>${r.employees.emp_code}</td><td>${r.employees.full_name}</td><td>₹${Number(r.professional_tax).toLocaleString('en-IN')}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No PT applicable this run.</td></tr>'}</tbody></table></div>
-    </div>
-  `;
-}
-
-function exportReport(rows, headers, filename){
-  downloadCSV(filename, headers, rows);
-}
-
-/* ============================================================================
-   SETTINGS
-   ============================================================================ */
-async function renderSettings(){
-  const content = document.getElementById('view-content');
-  if(!can('admin')){
-    content.innerHTML = '<div class="card muted">Only admins can view or edit statutory settings.</div>';
-    return;
-  }
-  const pf = SETTINGS.pf || {};
-  const esi = SETTINGS.esi || {};
-  const ptSlabs = SETTINGS.pt_slabs_ap || [];
-  const ptMarch = SETTINGS.pt_march_extra || {};
-  const schoolName = SETTINGS.school_name || '';
-
-  content.innerHTML = `
-    <div class="card">
-      <div class="section-title">School Details</div>
-      <div class="form-row"><label>School Name</label><input id="set-school-name" value="${schoolName}"></div>
-      <button class="btn btn-primary btn-sm" onclick="saveSchoolName()">Save</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Provident Fund (PF)</div>
-      <div class="form-grid">
-        <div class="form-row"><label>Employee Rate (%)</label><input id="set-pf-emp-rate" type="number" step="0.01" value="${pf.employee_rate}"></div>
-        <div class="form-row"><label>Employer Rate (%)</label><input id="set-pf-emr-rate" type="number" step="0.01" value="${pf.employer_rate}"></div>
-        <div class="form-row"><label>Wage Ceiling (₹, on Basic)</label><input id="set-pf-ceiling" type="number" value="${pf.wage_ceiling}"></div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="savePF()">Save PF Settings</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">ESI</div>
-      <div class="form-grid">
-        <div class="form-row"><label>Employee Rate (%)</label><input id="set-esi-emp-rate" type="number" step="0.01" value="${esi.employee_rate}"></div>
-        <div class="form-row"><label>Employer Rate (%)</label><input id="set-esi-emr-rate" type="number" step="0.01" value="${esi.employer_rate}"></div>
-        <div class="form-row"><label>Wage Ceiling (₹, on Gross)</label><input id="set-esi-ceiling" type="number" value="${esi.wage_ceiling}"></div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="saveESI()">Save ESI Settings</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Professional Tax — Andhra Pradesh Slabs</div>
-      <p class="muted">Default slabs per current AP rules. Edit if the state revises them.</p>
-      <div id="pt-slab-rows">
-        ${ptSlabs.map((s,i)=>`
-          <div class="form-grid" style="margin-bottom:6px;" data-slab-row>
-            <div class="form-row"><label>Min (₹)</label><input class="pt-min" type="number" value="${s.min}"></div>
-            <div class="form-row"><label>Max (₹, blank = no limit)</label><input class="pt-max" type="number" value="${s.max ?? ''}"></div>
-            <div class="form-row"><label>Amount (₹/month)</label><input class="pt-amount" type="number" value="${s.amount}"></div>
-          </div>`).join('')}
-      </div>
-      <div class="check-row">
-        <input type="checkbox" id="set-pt-march-enabled" ${ptMarch.enabled?'checked':''}>
-        <label for="set-pt-march-enabled" style="margin:0;">Higher PT amount in March</label>
-        <input type="number" id="set-pt-march-amount" class="tbl-input" style="width:80px" value="${ptMarch.amount||300}">
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="savePTSlabs()">Save PT Settings</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Attendance Rules</div>
-      <div class="form-grid">
-        <div class="form-row"><label>Late-entry cutoff (24h, e.g. 09:15)</label><input id="set-late-after" value="${(SETTINGS.attendance_rules && SETTINGS.attendance_rules.late_after) || '09:15'}"></div>
-        <div class="form-row"><label>Minimum hours for Half-Day credit</label><input id="set-half-day-hours" type="number" step="0.5" value="${(SETTINGS.attendance_rules && SETTINGS.attendance_rules.half_day_min_hours) ?? 4}"></div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="saveAttendanceRules()">Save Attendance Rules</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Unplanned Absences</div>
-      <p class="muted">Casual Leave is never applied automatically. A day with no attendance mark, no approved leave, and no approved backfill is Loss of Pay outright. To avoid a pay cut, the employee must formally apply for CL (or another leave type, below) and have it approved — or, for a missed punch on a past day, submit an Attendance Backfill request for admin approval.</p>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Leave Entitlements (annual, per employee)</div>
-      <div class="form-grid">
-        ${Object.entries(SETTINGS.leave_entitlements||{}).map(([type,val])=>`
-          <div class="form-row"><label>${leaveTypeLabel(type)}</label><input class="leave-entitlement-input" data-type="${type}" type="number" step="0.5" value="${val}"></div>
-        `).join('')}
-      </div>
-      <p class="muted">Leave Without Pay (LWP) has no balance — it's always available and always deducts pay. Individual employees' balances can be overridden from the Leave Requests screen.</p>
-      <button class="btn btn-primary btn-sm" onclick="saveLeaveEntitlements()">Save Entitlements</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Attendance Location (Geo-fencing)</div>
-      <div class="check-row"><input type="checkbox" id="set-loc-enabled" ${(SETTINGS.school_location && SETTINGS.school_location.enabled)?'checked':''}> <label for="set-loc-enabled" style="margin:0;">Require staff to be within range of the school to mark attendance</label></div>
-      <div class="form-grid">
-        <div class="form-row"><label>School Latitude</label><input id="set-loc-lat" type="number" step="0.000001" value="${(SETTINGS.school_location && SETTINGS.school_location.lat) ?? ''}"></div>
-        <div class="form-row"><label>School Longitude</label><input id="set-loc-lng" type="number" step="0.000001" value="${(SETTINGS.school_location && SETTINGS.school_location.lng) ?? ''}"></div>
-        <div class="form-row"><label>Allowed Radius (meters)</label><input id="set-loc-radius" type="number" value="${(SETTINGS.school_location && SETTINGS.school_location.radius_m) ?? 200}"></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-sm" onclick="useMyLocationForSchool()">Use my current location</button>
-        <button class="btn btn-primary btn-sm" onclick="saveSchoolLocation()">Save Location Settings</button>
-      </div>
-      <p class="muted">Every attendance mark always records the staff member's coordinates, whether or not this geo-fence check is enabled.</p>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Holiday Calendar</div>
-      <div class="form-grid">
-        <div class="form-row"><label>Date</label><input type="date" id="new-holiday-date"></div>
-        <div class="form-row"><label>Name</label><input id="new-holiday-name" placeholder="e.g. Independence Day"></div>
-        <div class="form-row"><label>Type</label>
-          <select id="new-holiday-type">
-            <option value="national">National</option>
-            <option value="state">State</option>
-            <option value="school" selected>School</option>
-            <option value="optional">Optional</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="addHoliday()">Add Holiday</button>
-      <div class="table-wrap" style="margin-top:12px;"><table>
-        <thead><tr><th>Date</th><th>Name</th><th>Type</th><th></th></tr></thead>
-        <tbody>${(await (async()=>{
-          const { data } = await sb.from('holidays').select('*').order('date');
-          window._HOLIDAYS_CACHE = data || [];
-          return (data||[]).map(h=>`<tr><td>${h.date}</td><td>${h.name}</td><td>${h.type}</td><td><button class="btn btn-sm btn-danger" onclick="deleteHoliday('${h.id}')">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No holidays added yet.</td></tr>';
-        })())}</tbody>
-      </table></div>
-      <p class="muted">Attendance automatically treats these dates as paid — employees are never marked absent on a holiday.</p>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Note on TDS</div>
-      <p class="muted">Income Tax (TDS) calculation is not automated in this version, per your request. Track TDS manually via Form 16 workflow, or ask to add auto-calculation later.</p>
-    </div>
-  `;
-}
-
-async function addHoliday(){
-  const date = document.getElementById('new-holiday-date').value;
-  const name = document.getElementById('new-holiday-name').value.trim();
-  const type = document.getElementById('new-holiday-type').value;
-  if(!date || !name){ toast('Enter a date and name.', true); return; }
-  const { error } = await sb.from('holidays').insert({ date, name, type });
-  if(error){ toast('Could not add holiday: ' + error.message, true); return; }
-  toast('Holiday added');
-  renderSettings();
-}
-
-async function deleteHoliday(id){
-  if(!confirm('Delete this holiday?')) return;
-  const { error } = await sb.from('holidays').delete().eq('id', id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-  toast('Holiday deleted');
-  renderSettings();
-}
-
-async function saveSchoolName(){
-  await saveSettingKey('school_name', document.getElementById('set-school-name').value);
-}
-async function savePF(){
-  await saveSettingKey('pf', {
-    employee_rate: parseFloat(document.getElementById('set-pf-emp-rate').value),
-    employer_rate: parseFloat(document.getElementById('set-pf-emr-rate').value),
-    wage_ceiling: parseFloat(document.getElementById('set-pf-ceiling').value)
-  });
-}
-async function saveESI(){
-  await saveSettingKey('esi', {
-    employee_rate: parseFloat(document.getElementById('set-esi-emp-rate').value),
-    employer_rate: parseFloat(document.getElementById('set-esi-emr-rate').value),
-    wage_ceiling: parseFloat(document.getElementById('set-esi-ceiling').value)
-  });
-}
-async function savePTSlabs(){
-  const rows = [...document.querySelectorAll('[data-slab-row]')].map(row=>({
-    min: parseFloat(row.querySelector('.pt-min').value)||0,
-    max: row.querySelector('.pt-max').value === '' ? null : parseFloat(row.querySelector('.pt-max').value),
-    amount: parseFloat(row.querySelector('.pt-amount').value)||0
-  }));
-  await saveSettingKey('pt_slabs_ap', rows);
-  await saveSettingKey('pt_march_extra', {
-    enabled: document.getElementById('set-pt-march-enabled').checked,
-    amount: parseFloat(document.getElementById('set-pt-march-amount').value)||300
-  });
-}
-
-async function saveAttendanceRules(){
-  await saveSettingKey('attendance_rules', {
-    late_after: document.getElementById('set-late-after').value.trim() || '09:15',
-    half_day_min_hours: parseFloat(document.getElementById('set-half-day-hours').value) || 4
-  });
-}
-
-async function saveSchoolLocation(){
-  await saveSettingKey('school_location', {
-    enabled: document.getElementById('set-loc-enabled').checked,
-    lat: parseFloat(document.getElementById('set-loc-lat').value) || null,
-    lng: parseFloat(document.getElementById('set-loc-lng').value) || null,
-    radius_m: parseFloat(document.getElementById('set-loc-radius').value) || 200
-  });
-}
-
-async function useMyLocationForSchool(){
-  try{
-    const pos = await getPosition();
-    document.getElementById('set-loc-lat').value = pos.coords.latitude.toFixed(6);
-    document.getElementById('set-loc-lng').value = pos.coords.longitude.toFixed(6);
-    toast('Location captured — remember to Save.');
-  }catch(e){
-    toast('Could not get location: ' + e.message, true);
-  }
-}
-
-/* ============================================================================
-   GEOLOCATION HELPERS
-   ============================================================================ */
-function getPosition(){
-  return new Promise((resolve, reject)=>{
-    if(!navigator.geolocation){ reject(new Error('Geolocation is not supported on this device/browser.')); return; }
-    navigator.geolocation.getCurrentPosition(resolve, err => reject(new Error(err.message || 'Location access denied.')), { enableHighAccuracy:true, timeout:15000 });
-  });
-}
-
-function haversineMeters(lat1, lng1, lat2, lng2){
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-  return R * 2 * Math.asin(Math.sqrt(a));
-}
-
-/* ============================================================================
-   MONTHLY CL / LOP COMPUTATION FROM DAILY SELF-ATTENDANCE
-   ============================================================================ */
-async function computeMonthlyFromDaily(employeeId, month, year){
-  let totalDays = daysInMonth(month, year);
-  const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
-  const endDate = `${year}-${String(month).padStart(2,'0')}-${String(totalDays).padStart(2,'0')}`;
-  const todayStr = localDateStr(new Date());
-
-  const { data: rows } = await sb.from('daily_attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate);
-  const byDate = {}; (rows||[]).forEach(r => byDate[r.date] = r);
-
-  // Days already paid out via the arrears mechanism (created when a backfill
-  // was approved after this exact month had already been finalized) must be
-  // excluded from THIS month's own paid-days count. Without this, reopening
-  // a finalized run and resyncing/resaving it would credit the day twice:
-  // once here (full day, since it's now an approved backfill) and once via
-  // the arrear already sitting in a later month's payslip. 'cancelled'
-  // arrears don't count — those were reversed and never paid.
-  const { data: arrearRows } = await sb.from('arrears').select('source_date,status').eq('employee_id', employeeId).gte('source_date', startDate).lte('source_date', endDate).neq('status','cancelled');
-  const arrearDateSet = new Set((arrearRows||[]).map(a=>a.source_date));
-  let arrearedDaysCount = 0;
-
-  const { data: holidayRows } = await sb.from('holidays').select('*').gte('date', startDate).lte('date', endDate);
-  const holidayByDate = {}; (holidayRows||[]).forEach(h => holidayByDate[h.date] = h);
-
-  // Approved leave overlapping this month takes priority over raw attendance marks
-  const { data: leaveRows } = await sb.from('leave_requests').select('*')
-    .eq('employee_id', employeeId).eq('status', 'approved')
-    .lte('from_date', endDate).gte('to_date', startDate);
-  const leaveByDate = {};
-  (leaveRows||[]).forEach(lr => {
-    let d = new Date(Math.max(new Date(lr.from_date), new Date(startDate)));
-    const last = new Date(Math.min(new Date(lr.to_date), new Date(endDate)));
-    while(d <= last){
-      leaveByDate[localDateStr(d)] = lr;
-      d.setDate(d.getDate()+1);
-    }
-  });
-
-  let presentEquivalent = 0, unplannedAbsentEquivalent = 0, lwpDays = 0;
-  const dayDetails = [];
-  for(let d=1; d<=totalDays; d++){
-    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-
-    const holiday = holidayByDate[dateStr];
-    const defaultHolidayName = !holiday ? defaultWeeklyHolidayName(dateStr) : null;
-    if(holiday || defaultHolidayName){
-      presentEquivalent += 1;
-      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status: 'Holiday — ' + (holiday ? holiday.name : defaultHolidayName) });
-      continue;
-    }
-
-    if(dateStr > todayStr){
-      // Future day — nothing to judge yet, don't penalize it
-      presentEquivalent += 1;
-      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'Upcoming' });
-      continue;
-    }
-
-    const leave = leaveByDate[dateStr];
-    if(leave){
-      if(leave.leave_type === 'LWP'){
-        lwpDays += leave.is_half_day ? 0.5 : 1;
-        dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'LWP (Approved)' });
-      } else {
-        const val = leave.is_half_day ? 0.5 : 1;
-        presentEquivalent += val;
-        dayDetails.push({ date: dateStr, morning:false, afternoon:false, status: leave.leave_type + ' (Approved Leave)' });
-      }
-      continue;
-    }
-
-    const r = byDate[dateStr];
-
-    // A backfilled (past-day, location-bypassed) mark only counts once
-    // admin/accountant approves it. While pending, or if rejected, the day
-    // is not credited — an unplanned absence still needs a formal leave
-    // application (see below) to avoid a pay cut.
-    if(r && r.is_backfill && r.backfill_status === 'pending'){
-      unplannedAbsentEquivalent += 1;
-      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'Backfill Pending Approval' });
-      continue;
-    }
-    if(r && r.is_backfill && r.backfill_status === 'rejected'){
-      unplannedAbsentEquivalent += 1;
-      dayDetails.push({ date: dateStr, morning:false, afternoon:false, status:'Absent (Backfill Rejected)' });
-      continue;
-    }
-
-    const morning = !!(r && r.morning_marked_at);
-    const afternoon = !!(r && r.afternoon_marked_at);
-    const backfilled = !!(r && r.is_backfill && r.backfill_status === 'approved');
-
-    if(backfilled && arrearDateSet.has(dateStr)){
-      arrearedDaysCount += 1;
-      dayDetails.push({ date: dateStr, morning, afternoon, status: 'Paid via Arrear (excluded from this month — see next payroll run)' });
-      continue;
-    }
-
-    let dayValue = 0, status = 'Absent';
-    if(morning && afternoon){ dayValue = 1; status = backfilled ? 'Full Day (Backfilled)' : 'Full Day'; }
-    else if(morning || afternoon){ dayValue = 0.5; status = backfilled ? 'Half Day (Backfilled)' : 'Half Day'; }
-    presentEquivalent += dayValue;
-    unplannedAbsentEquivalent += round2(1 - dayValue);
-    dayDetails.push({ date: dateStr, morning, afternoon, status });
-  }
-  totalDays -= arrearedDaysCount; // keep the ratio fair — pulled out of both sides
-
-  // Unplanned absences (no mark, no approved backfill, no leave applied) are
-  // Loss of Pay outright. Casual Leave is never applied automatically —
-  // an employee must formally apply for CL (like any other leave type) and
-  // have it approved; that's already credited above via leaveByDate.
-  const lopDays = round2(unplannedAbsentEquivalent + lwpDays);
-  const paidDays = round2(totalDays - lopDays);
-
-  // CL reporting reflects only formally-applied, approved CL leave (year to date)
-  const clBalance = await getLeaveBalance(employeeId, 'CL', year);
-
-  return { totalDays, presentEquivalent, absentEquivalent: unplannedAbsentEquivalent, clUsed: clBalance.used, clAvailable: clBalance.allocated, lwpDays, lopDays, paidDays, dayDetails };
-}
-
-/* ============================================================================
-   EMPLOYEE SELF-SERVICE: MARK ATTENDANCE
-   ============================================================================ */
-async function renderMarkAttendance(){
-  const content = document.getElementById('view-content');
-  if(!MY_EMPLOYEE){
-    content.innerHTML = '<div class="card muted">Your login is not linked to an employee record yet. Contact the school office.</div>';
-    return;
-  }
-  content.innerHTML = '<p class="muted">Loading…</p>';
-
-  const today = new Date();
-  const todayStr = localDateStr(today);
-  const { data: row } = await sb.from('daily_attendance').select('*').eq('employee_id', MY_EMPLOYEE.id).eq('date', todayStr).maybeSingle();
-
-  const morningIn = !!(row && row.morning_marked_at);
-  const morningOut = !!(row && row.morning_checkout_at);
-  const afternoonIn = !!(row && row.afternoon_marked_at);
-  const afternoonOut = !!(row && row.afternoon_checkout_at);
-  const loc = SETTINGS.school_location || {};
-  const rules = SETTINGS.attendance_rules || { late_after: '09:15' };
-
-  const morningHours = (morningIn && morningOut) ? ((new Date(row.morning_checkout_at) - new Date(row.morning_marked_at)) / 3600000).toFixed(1) : null;
-  const afternoonHours = (afternoonIn && afternoonOut) ? ((new Date(row.afternoon_checkout_at) - new Date(row.afternoon_marked_at)) / 3600000).toFixed(1) : null;
-  const isLate = morningIn && new Date(row.morning_marked_at).toTimeString().slice(0,5) > rules.late_after;
-
-  content.innerHTML = `
-    <div class="card">
-      <div class="section-title">Today — ${today.toLocaleDateString('en-IN',{weekday:'long', year:'numeric', month:'long', day:'numeric'})}</div>
-      ${loc.enabled ? `<p class="muted">Attendance requires location access and you must be within ${loc.radius_m}m of the school.</p>` : `<p class="muted">Attendance requires location access.</p>`}
-      ${isLate ? `<p style="color:var(--warn);font-weight:600;">⚠ Late entry — checked in after ${rules.late_after}</p>` : ''}
-
-      <div class="section-title" style="margin-top:14px;">Morning Session</div>
-      <div class="btn-row">
-        <button class="btn ${morningIn?'':'btn-primary'}" ${morningIn?'disabled':''} onclick="markAttendance('morning','checkin')">
-          ${morningIn ? '✓ Checked in ' + new Date(row.morning_marked_at).toLocaleTimeString('en-IN') : 'Check In'}
-        </button>
-        <button class="btn ${morningOut?'':'btn-primary'}" ${(!morningIn || morningOut)?'disabled':''} onclick="markAttendance('morning','checkout')">
-          ${morningOut ? '✓ Checked out ' + new Date(row.morning_checkout_at).toLocaleTimeString('en-IN') : 'Check Out'}
-        </button>
-        ${morningHours ? `<span class="muted" style="align-self:center;">${morningHours} hrs</span>` : ''}
-      </div>
-
-      <div class="section-title">Afternoon Session</div>
-      <div class="btn-row">
-        <button class="btn ${afternoonIn?'':'btn-primary'}" ${afternoonIn?'disabled':''} onclick="markAttendance('afternoon','checkin')">
-          ${afternoonIn ? '✓ Checked in ' + new Date(row.afternoon_marked_at).toLocaleTimeString('en-IN') : 'Check In'}
-        </button>
-        <button class="btn ${afternoonOut?'':'btn-primary'}" ${(!afternoonIn || afternoonOut)?'disabled':''} onclick="markAttendance('afternoon','checkout')">
-          ${afternoonOut ? '✓ Checked out ' + new Date(row.afternoon_checkout_at).toLocaleTimeString('en-IN') : 'Check Out'}
-        </button>
-        ${afternoonHours ? `<span class="muted" style="align-self:center;">${afternoonHours} hrs</span>` : ''}
-      </div>
-
-      <div id="mark-attendance-status" class="muted" style="margin-top:10px;"></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Missed Past Days? Request Backfill</div>
-      <p class="muted">Find genuinely missed punches over a date range and request them all at once. Location is not required — each day goes to your admin/accountant for approval before it counts toward your attendance.</p>
-      <div class="form-grid">
-        <div class="form-row"><label>From</label><input type="date" id="backfill-from"></div>
-        <div class="form-row"><label>To</label><input type="date" id="backfill-to" max="${localDateStr(new Date(Date.now()-86400000))}"></div>
-      </div>
-      <button class="btn btn-sm" onclick="loadMissingDaysForBackfill()">Find Missing Days</button>
-      <div id="backfill-missing-list" style="margin-top:12px;"></div>
-      <div id="my-backfill-history" style="margin-top:14px;"></div>
-    </div>
-  `;
-  const y = new Date(); y.setDate(y.getDate()-14);
-  document.getElementById('backfill-from').value = localDateStr(y);
-  document.getElementById('backfill-to').value = localDateStr(new Date(Date.now()-86400000));
-  loadMyBackfillHistory();
-}
-
-async function loadMyBackfillHistory(){
-  const el = document.getElementById('my-backfill-history');
-  if(!el) return;
-  const { data } = await sb.from('daily_attendance')
-    .select('date,backfill_status,backfill_reason')
-    .eq('employee_id', MY_EMPLOYEE.id).eq('is_backfill', true)
-    .order('date', { ascending:false }).limit(15);
-  if(!data || !data.length){ el.innerHTML = ''; return; }
-  el.innerHTML = `
-    <div class="section-title" style="margin-top:0;">Your Recent Backfill Requests</div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Date</th><th>Reason</th><th>Status</th></tr></thead>
-      <tbody>
-        ${data.map(r=>`
-          <tr>
-            <td>${r.date}</td>
-            <td>${r.backfill_reason || '—'}</td>
-            <td><span class="badge badge-${r.backfill_status==='approved'?'active':r.backfill_status==='rejected'?'terminated':'inactive'}">${r.backfill_status}</span></td>
-          </tr>`).join('')}
-      </tbody>
-    </table></div>
-  `;
-}
-
-async function loadMissingDaysForBackfill(){
-  const listEl = document.getElementById('backfill-missing-list');
-  const fromDate = document.getElementById('backfill-from').value;
-  let toDate = document.getElementById('backfill-to').value;
-  const yesterday = localDateStr(new Date(Date.now()-86400000));
-
-  if(!fromDate || !toDate){ toast('Choose a from and to date.', true); return; }
-  if(toDate > yesterday) toDate = yesterday; // backfill is past-days only
-  if(fromDate > toDate){ toast('From date must be on or before To date (and both in the past).', true); return; }
-
-  listEl.innerHTML = '<p class="muted">Checking…</p>';
-
-  const { data: attRows } = await sb.from('daily_attendance')
-    .select('date,morning_marked_at,afternoon_marked_at,is_backfill,backfill_status')
-    .eq('employee_id', MY_EMPLOYEE.id).gte('date', fromDate).lte('date', toDate);
-  const attByDate = {}; (attRows||[]).forEach(r=>attByDate[r.date]=r);
-
-  const { data: holidayRows } = await sb.from('holidays').select('date').gte('date', fromDate).lte('date', toDate);
-  const holidaySet = new Set((holidayRows||[]).map(h=>h.date));
-
-  const { data: leaveRows } = await sb.from('leave_requests').select('from_date,to_date')
-    .eq('employee_id', MY_EMPLOYEE.id).eq('status','approved')
-    .lte('from_date', toDate).gte('to_date', fromDate);
-
-  const missing = [];
-  let cur = new Date(fromDate + 'T00:00:00');
-  const end = new Date(toDate + 'T00:00:00');
-  while(cur <= end){
-    const dateStr = localDateStr(cur);
-    cur.setDate(cur.getDate()+1);
-
-    if(holidaySet.has(dateStr) || isDefaultWeeklyHoliday(dateStr)) continue;
-    if((leaveRows||[]).some(lr => lr.from_date<=dateStr && lr.to_date>=dateStr)) continue;
-
-    const r = attByDate[dateStr];
-    if(r){
-      if(r.morning_marked_at || r.afternoon_marked_at) continue; // already has a mark
-      if(r.is_backfill && (r.backfill_status==='pending' || r.backfill_status==='approved')) continue; // already requested
-    }
-    missing.push(dateStr);
-  }
-
-  renderMissingDaysList(missing);
-}
-
-function renderMissingDaysList(missing){
-  const listEl = document.getElementById('backfill-missing-list');
-  if(!missing.length){ listEl.innerHTML = '<p class="muted">No missing days found in that range.</p>'; return; }
-  listEl.innerHTML = `
-    <div class="btn-row" style="margin-bottom:6px;">
-      <button class="btn btn-sm" onclick="toggleAllBackfillChecks(true)">Select All</button>
-      <button class="btn btn-sm" onclick="toggleAllBackfillChecks(false)">Clear</button>
-      <button class="btn btn-sm" onclick="setAllBackfillDayType('full')">Set All Full Day</button>
-      <button class="btn btn-sm" onclick="setAllBackfillDayType('half')">Set All Half Day</button>
-    </div>
-    <div class="table-wrap"><table>
-      <thead><tr><th></th><th>Date</th><th>Day Type</th></tr></thead>
-      <tbody>
-        ${missing.map(d=>`<tr data-date="${d}">
-          <td><input type="checkbox" class="backfill-check" value="${d}" checked></td>
-          <td>${new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short', day:'2-digit', month:'short', year:'numeric'})}</td>
-          <td>
-            <select class="backfill-day-type tbl-input" style="width:auto;">
-              <option value="full">Full Day</option>
-              <option value="half">Half Day</option>
-            </select>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table></div>
-    <div class="form-row" style="margin-top:10px;max-width:400px;"><label>Reason (applies to all selected days)</label><input id="backfill-reason-bulk" placeholder="e.g. Forgot to check in"></div>
-    <button class="btn btn-primary btn-sm" onclick="submitBulkBackfillRequest()">Submit Selected Requests</button>
-  `;
-}
-
-function toggleAllBackfillChecks(checked){
-  document.querySelectorAll('.backfill-check').forEach(cb=>cb.checked=checked);
-}
-
-function setAllBackfillDayType(type){
-  document.querySelectorAll('.backfill-day-type').forEach(sel=>sel.value=type);
-}
-
-async function submitBulkBackfillRequest(){
-  const reason = document.getElementById('backfill-reason-bulk').value.trim();
-  const rows = [...document.querySelectorAll('#backfill-missing-list tr[data-date]')]
-    .filter(row => row.querySelector('.backfill-check').checked)
-    .map(row => ({ date: row.dataset.date, dayType: row.querySelector('.backfill-day-type').value }));
-
-  if(!rows.length){ toast('Select at least one day.', true); return; }
-  if(!reason){ toast('Add a short reason for the missed punches.', true); return; }
-
-  const payloadRows = rows.map(({date, dayType})=>{
-    const nominalTime = new Date(date + 'T12:00:00').toISOString();
-    return {
-      employee_id: MY_EMPLOYEE.id,
-      date,
-      // Half Day = only the morning session is credited (matches the same
-      // half-day = 0.5 day logic used everywhere else in the app); Full Day
-      // credits both sessions.
-      morning_marked_at: nominalTime,
-      afternoon_marked_at: dayType === 'full' ? nominalTime : null,
-      morning_lat: null, morning_lng: null, afternoon_lat: null, afternoon_lng: null,
-      is_backfill: true,
-      backfill_status: 'pending',
-      backfill_reason: reason + (dayType === 'half' ? ' (Half Day)' : '')
-    };
-  });
-
-  const { error } = await sb.from('daily_attendance').upsert(payloadRows, { onConflict: 'employee_id,date' });
-  if(error){ toast('Could not submit requests: ' + error.message, true); return; }
-  toast(`Submitted ${payloadRows.length} backfill request${payloadRows.length>1?'s':''} for admin approval`);
-  document.getElementById('backfill-missing-list').innerHTML = '';
-  loadMyBackfillHistory();
-}
-
-async function markAttendance(session, action){
-  const statusEl = document.getElementById('mark-attendance-status');
-  statusEl.textContent = 'Getting your location…';
-  let pos;
-  try{
-    pos = await getPosition();
-  }catch(e){
-    statusEl.textContent = '';
-    toast('Location access is required to mark attendance: ' + e.message, true);
-    return;
-  }
-
-  const loc = SETTINGS.school_location || {};
-  if(loc.enabled && loc.lat != null && loc.lng != null){
-    const dist = haversineMeters(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng);
-    if(dist > loc.radius_m){
-      statusEl.textContent = '';
-      toast(`You appear to be ${Math.round(dist)}m from school (limit ${loc.radius_m}m). Attendance not marked.`, true);
-      return;
-    }
-  }
-
-  const today = localDateStr(new Date());
-  const payload = { employee_id: MY_EMPLOYEE.id, date: today };
-  const col = session + (action === 'checkin' ? '_marked_at' : '_checkout_at');
-  payload[col] = new Date().toISOString();
-  if(action === 'checkin'){
-    payload[session + '_lat'] = pos.coords.latitude;
-    payload[session + '_lng'] = pos.coords.longitude;
-  }
-
-  const { error } = await sb.from('daily_attendance').upsert(payload, { onConflict: 'employee_id,date' });
-  statusEl.textContent = '';
-  if(error){ toast('Could not mark attendance: ' + error.message, true); return; }
-  toast((session === 'morning' ? 'Morning' : 'Afternoon') + ' ' + (action==='checkin'?'check-in':'check-out') + ' recorded');
-  renderMarkAttendance();
-}
-
-/* ============================================================================
-   EMPLOYEE SELF-SERVICE: MY ATTENDANCE HISTORY
-   ============================================================================ */
-async function renderMyHistory(){
-  const content = document.getElementById('view-content');
-  if(!MY_EMPLOYEE){ content.innerHTML = '<div class="card muted">Your login is not linked to an employee record yet.</div>'; return; }
-  const now = new Date();
-  content.innerHTML = `
-    <div class="btn-row">
-      <select id="hist-month" class="period-select" onchange="loadMyHistory()">${MONTH_NAMES.slice(1).map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select>
-      <input type="number" id="hist-year" class="period-input" style="width:90px" value="${now.getFullYear()}" onchange="loadMyHistory()">
-    </div>
-    <div id="my-history-content"></div>
-  `;
-  await loadMyHistory();
-}
-
-async function loadMyHistory(){
-  const month = parseInt(document.getElementById('hist-month').value);
-  const year = parseInt(document.getElementById('hist-year').value);
-  const summary = await computeMonthlyFromDaily(MY_EMPLOYEE.id, month, year);
-
-  document.getElementById('my-history-content').innerHTML = `
-    <div class="grid-kpi">
-      <div class="kpi"><div class="label">Present (full-day equiv.)</div><div class="value">${summary.presentEquivalent}</div></div>
-      <div class="kpi"><div class="label">CL Used (This Year)</div><div class="value">${summary.clUsed} / ${summary.clAvailable}</div></div>
-      <div class="kpi"><div class="label">Loss of Pay Days</div><div class="value">${summary.lopDays}</div></div>
-      <div class="kpi"><div class="label">Paid Days</div><div class="value">${summary.paidDays} / ${summary.totalDays}</div></div>
-    </div>
-    <div class="card">
-      <div class="section-title">Monthly Calendar</div>
-      ${buildCalendarHTML(summary.dayDetails, month, year)}
-    </div>
-    <div class="card">
-      <div class="table-wrap"><table>
-        <thead><tr><th>Date</th><th>Morning</th><th>Afternoon</th><th>Status</th></tr></thead>
-        <tbody>
-          ${summary.dayDetails.map(d=>`
-            <tr>
-              <td>${new Date(d.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</td>
-              <td>${d.morning ? '✓' : '—'}</td>
-              <td>${d.afternoon ? '✓' : '—'}</td>
-              <td>${d.status}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table></div>
-    </div>
-  `;
-}
-
-/* ============================================================================
-   EMPLOYEE SELF-SERVICE: MY PAYSLIPS
-   ============================================================================ */
-async function renderMyPayslips(){
-  const content = document.getElementById('view-content');
-  if(!MY_EMPLOYEE){ content.innerHTML = '<div class="card muted">Your login is not linked to an employee record yet.</div>'; return; }
-  content.innerHTML = '<p class="muted">Loading…</p>';
-
-  const { data: slips, error } = await sb.from('payslips')
-    .select('*, payroll_runs!inner(month, year, status)')
-    .eq('employee_id', MY_EMPLOYEE.id)
-    .eq('payroll_runs.status', 'finalized')
-    .order('created_at', { ascending:false });
-
-  if(error){ content.innerHTML = '<div class="card muted">Could not load payslips.</div>'; return; }
-
-  content.innerHTML = `
-    <div class="card">
-      <div class="table-wrap"><table>
-        <thead><tr><th>Month</th><th>Net Pay</th><th></th></tr></thead>
-        <tbody>
-          ${(slips||[]).map(s=>`
-            <tr>
-              <td>${MONTH_NAMES[s.payroll_runs.month]} ${s.payroll_runs.year}</td>
-              <td><strong>₹${Number(s.net_pay).toLocaleString('en-IN')}</strong></td>
-              <td><button class="btn btn-sm" onclick='viewMyPayslip(${JSON.stringify(s).replace(/'/g,"&#39;")})'>View</button></td>
-            </tr>`).join('') || '<tr><td colspan="3" class="muted">No finalized payslips yet.</td></tr>'}
-        </tbody>
-      </table></div>
-    </div>
-  `;
-}
-
-function viewMyPayslip(slip){
-  const monthLabel = `${MONTH_NAMES[slip.payroll_runs.month]} ${slip.payroll_runs.year}`;
-  document.getElementById('print-area').innerHTML = renderPayslipHTML(monthLabel, MY_EMPLOYEE.full_name, MY_EMPLOYEE.emp_code, MY_EMPLOYEE.designation, slip.breakdown);
-  document.getElementById('payslip-modal').classList.add('show');
-}
-
-/* ============================================================================
-   LEAVE MANAGEMENT
-   ============================================================================ */
-const LEAVE_TYPES = ['CL','SL','EL','MATERNITY','PATERNITY','COMP_OFF','LWP'];
-function leaveTypeLabel(type){
-  return { CL:'Casual Leave', SL:'Sick Leave', EL:'Earned Leave', MATERNITY:'Maternity Leave',
-    PATERNITY:'Paternity Leave', COMP_OFF:'Compensatory Off', LWP:'Leave Without Pay' }[type] || type;
-}
-
-async function saveLeaveEntitlements(){
-  const entitlements = {};
-  document.querySelectorAll('.leave-entitlement-input').forEach(inp=>{
-    entitlements[inp.dataset.type] = parseFloat(inp.value)||0;
-  });
-  await saveSettingKey('leave_entitlements', entitlements);
-}
-
-// Balance = (per-employee override in leave_balances, else the Settings default) minus approved days used this Financial Year (June-May)
-async function getLeaveBalance(employeeId, leaveType, fyYear){
-  if(leaveType === 'LWP') return { allocated: null, used: null, balance: null }; // unlimited, no balance tracked
-
-  const defaultAllocated = (SETTINGS.leave_entitlements && SETTINGS.leave_entitlements[leaveType]) ?? 0;
-  const { data: overrideRow } = await sb.from('leave_balances').select('*').eq('employee_id', employeeId).eq('leave_type', leaveType).eq('year', fyYear).maybeSingle();
-  const allocated = overrideRow ? Number(overrideRow.allocated) : defaultAllocated;
-
-  const { start, end } = fyDateRange(fyYear);
-  const { data: used } = await sb.from('leave_requests').select('days')
-    .eq('employee_id', employeeId).eq('leave_type', leaveType).eq('status','approved')
-    .gte('from_date', start).lte('to_date', end);
-  const usedDays = (used||[]).reduce((s,r)=>s+Number(r.days),0);
-
-  return { allocated, used: usedDays, balance: round2(allocated - usedDays) };
-}
-
-/* ---------- Employee: Apply / Balance / History ---------- */
-async function renderMyLeave(){
-  const content = document.getElementById('view-content');
-  if(!MY_EMPLOYEE){ content.innerHTML = '<div class="card muted">Your login is not linked to an employee record yet.</div>'; return; }
-  content.innerHTML = '<p class="muted">Loading…</p>';
-  const year = currentFYStartYear();
-  const balances = await Promise.all(LEAVE_TYPES.filter(t=>t!=='LWP').map(async t => ({ type:t, ...(await getLeaveBalance(MY_EMPLOYEE.id, t, year)) })));
-
-  content.innerHTML = `
-    <div class="card">
-      <div class="section-title">Apply for Leave</div>
-      <div class="form-grid">
-        <div class="form-row"><label>Leave Type</label>
-          <select id="lv-type">${LEAVE_TYPES.map(t=>`<option value="${t}">${leaveTypeLabel(t)}</option>`).join('')}</select>
-        </div>
-        <div class="form-row"><label>&nbsp;</label>
-          <div class="check-row" style="margin:0;"><input type="checkbox" id="lv-half-day"> <label for="lv-half-day" style="margin:0;">Half-Day</label></div>
-        </div>
-        <div class="form-row"><label>From Date</label><input type="date" id="lv-from"></div>
-        <div class="form-row"><label>To Date</label><input type="date" id="lv-to"></div>
-      </div>
-      <div class="form-row"><label>Reason</label><input id="lv-reason" placeholder="Brief reason"></div>
-      <div class="form-row"><label>Certificate note (optional)</label><input id="lv-cert-note" placeholder="e.g. Medical certificate submitted to office"></div>
-      <button class="btn btn-primary btn-sm" onclick="submitLeaveApplication()">Submit Application</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Leave Balance (${fyLabel(year)})</div>
-      <div class="grid-kpi">
-        ${balances.map(b=>`<div class="kpi"><div class="label">${leaveTypeLabel(b.type)}</div><div class="value">${b.balance} / ${b.allocated}</div></div>`).join('')}
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Leave History</div>
-      <div id="my-leave-history"><p class="muted">Loading…</p></div>
-    </div>
-  `;
-  loadMyLeaveHistory();
-}
-
-async function submitLeaveApplication(){
-  const leaveType = document.getElementById('lv-type').value;
-  const isHalfDay = document.getElementById('lv-half-day').checked;
-  const fromDate = document.getElementById('lv-from').value;
-  const toDate = isHalfDay ? fromDate : document.getElementById('lv-to').value;
-  const reason = document.getElementById('lv-reason').value.trim();
-  const certNote = document.getElementById('lv-cert-note').value.trim();
-
-  if(!fromDate || !toDate){ toast('Choose from/to dates.', true); return; }
-  if(new Date(toDate) < new Date(fromDate)){ toast('To Date cannot be before From Date.', true); return; }
-
-  const days = isHalfDay ? 0.5 : (Math.round((new Date(toDate)-new Date(fromDate))/86400000) + 1);
-
-  const { error } = await sb.from('leave_requests').insert({
-    employee_id: MY_EMPLOYEE.id,
-    leave_type: leaveType,
-    from_date: fromDate,
-    to_date: toDate,
-    is_half_day: isHalfDay,
-    days,
-    reason: reason || null,
-    certificate_note: certNote || null,
-    status: 'pending'
-  });
-  if(error){ toast('Could not submit: ' + error.message, true); return; }
-  toast('Leave application submitted');
-  renderMyLeave();
-}
-
-async function loadMyLeaveHistory(){
-  const { data: requests } = await sb.from('leave_requests').select('*').eq('employee_id', MY_EMPLOYEE.id).order('requested_at',{ascending:false});
-  document.getElementById('my-leave-history').innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Admin Comments</th></tr></thead>
-      <tbody>
-        ${(requests||[]).map(r=>`
-          <tr>
-            <td>${leaveTypeLabel(r.leave_type)}</td>
-            <td>${r.from_date}</td>
-            <td>${r.to_date}</td>
-            <td>${r.days}</td>
-            <td><span class="badge badge-${r.status==='approved'?'active':r.status==='rejected'?'terminated':'inactive'}">${r.status}</span></td>
-            <td>${r.admin_comments || '—'}</td>
-          </tr>`).join('') || '<tr><td colspan="6" class="muted">No leave applications yet.</td></tr>'}
-      </tbody>
-    </table></div>
-  `;
-}
-
-/* ---------- Admin: Leave Requests, Balances, Register ---------- */
-async function renderLeaveRequests(){
-  const content = document.getElementById('view-content');
-  content.innerHTML = '<p class="muted">Loading…</p>';
-  const { data: requests } = await sb.from('leave_requests').select('*, employees(emp_code, full_name, user_id)').order('requested_at',{ascending:false});
-  const employees = await loadEmployees();
-
-  content.innerHTML = `
-    <div class="card">
-      <div class="section-title">Leave Requests</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          ${(requests||[]).map(r=>`
-            <tr>
-              <td>${r.employees.emp_code}</td>
-              <td>${r.employees.full_name}</td>
-              <td>${leaveTypeLabel(r.leave_type)}</td>
-              <td>${r.from_date}</td>
-              <td>${r.to_date}</td>
-              <td>${r.days}</td>
-              <td>${r.reason||'—'}</td>
-              <td><span class="badge badge-${r.status==='approved'?'active':r.status==='rejected'?'terminated':'inactive'}">${r.status}</span></td>
-              <td>${r.status==='pending' && can('admin','accountant') ? `
-                <button class="btn btn-sm" onclick="decideLeaveRequest('${r.id}','approved')">Approve</button>
-                <button class="btn btn-sm btn-danger" onclick="decideLeaveRequest('${r.id}','rejected')">Reject</button>
-              ` : ''}</td>
-            </tr>`).join('') || '<tr><td colspan="9" class="muted">No leave requests yet.</td></tr>'}
-        </tbody>
-      </table></div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Leave Balances — ${fyLabel(currentFYStartYear())}</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Code</th><th>Name</th>${LEAVE_TYPES.filter(t=>t!=='LWP').map(t=>`<th>${leaveTypeLabel(t)}</th>`).join('')}</tr></thead>
-        <tbody id="leave-balance-table"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
-      </table></div>
-      <button class="btn btn-sm" style="margin-top:10px;" onclick="exportLeaveRegister()">Export Leave Register (CSV)</button>
-    </div>
-  `;
-
-  const year = currentFYStartYear();
-  const activeEmployees = employees.filter(e=>e.status==='active');
-  const rowsHtml = await Promise.all(activeEmployees.map(async e=>{
-    const balances = await Promise.all(LEAVE_TYPES.filter(t=>t!=='LWP').map(t=>getLeaveBalance(e.id, t, year)));
-    return `<tr>
-      <td>${e.emp_code}</td><td>${e.full_name}</td>
-      ${balances.map((b,i)=>`<td>${b.balance}/${b.allocated} <button class="btn btn-sm" style="padding:2px 6px;" onclick="editLeaveBalance('${e.id}','${LEAVE_TYPES.filter(t=>t!=='LWP')[i]}', ${b.allocated})">✎</button></td>`).join('')}
-    </tr>`;
-  }));
-  document.getElementById('leave-balance-table').innerHTML = rowsHtml.join('') || '<tr><td colspan="8" class="muted">No active employees.</td></tr>';
-
-  window._LEAVE_REQUESTS_CACHE = requests || [];
-}
-
-async function decideLeaveRequest(id, status){
-  const comments = prompt(status==='approved' ? 'Add an approval comment (optional):' : 'Reason for rejection (optional):') || null;
-  const { error } = await sb.from('leave_requests').update({
-    status, admin_comments: comments, decided_at: new Date().toISOString(), decided_by: CURRENT_PROFILE.id
-  }).eq('id', id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-
-  const req = (window._LEAVE_REQUESTS_CACHE||[]).find(r=>r.id===id);
-  if(req && req.employees && req.employees.user_id){
-    notifyUser(req.employees.user_id, `Your ${leaveTypeLabel(req.leave_type)} request (${req.from_date} to ${req.to_date}) was ${status}${comments ? ': ' + comments : ''}.`, 'leave');
-  }
-
-  toast('Leave request ' + status);
-  renderLeaveRequests();
-}
-
-/* ---------- Admin: Attendance Backfill Requests ---------- */
-async function renderBackfillRequests(){
-  const content = document.getElementById('view-content');
-  content.innerHTML = '<p class="muted">Loading…</p>';
-  const { data: requests } = await sb.from('daily_attendance')
-    .select('id, employee_id, date, backfill_reason, backfill_status, reviewed_at, employees(emp_code, full_name, user_id)')
-    .eq('is_backfill', true).order('date', { ascending:false });
-
-  const { data: finalizedRuns } = await sb.from('payroll_runs').select('month,year').eq('status','finalized');
-  const finalizedSet = new Set((finalizedRuns||[]).map(r => `${r.year}-${r.month}`));
-  window._FINALIZED_MONTHS = finalizedSet;
-
-  const pendingCount = (requests||[]).filter(r=>r.backfill_status==='pending').length;
-
-  content.innerHTML = `
-    <div class="card">
-      <div class="section-title">Attendance Backfill Requests</div>
-      <p class="muted">Employees can request genuinely missed past-day punches be marked, without the usual location check — often submitted in a batch covering several days. Approving credits the day toward attendance; rejecting leaves it as an unplanned absence (Loss of Pay unless formal leave is applied instead).</p>
-      <p class="muted">⚠ If a request's date falls in a month whose payroll is already <strong>finalized</strong>, the original payslip itself is never rewritten. Instead, approving it automatically queues an <strong>arrear</strong> (one day's pay, at that month's rate) which gets pulled into the employee's next payroll run.</p>
-      ${can('admin','accountant') ? `<button class="btn btn-sm" style="margin-bottom:10px;" onclick="scanForMissedArrears()">Scan for Missed Arrears (fix historical gaps)</button>` : ''}
-      ${pendingCount && can('admin','accountant') ? `
-        <div class="btn-row" style="margin-bottom:8px;">
-          <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(true)">Select All Pending</button>
-          <button class="btn btn-sm" onclick="toggleAllBackfillReqChecks(false)">Clear</button>
-          <button class="btn btn-sm btn-primary" onclick="decideBackfillRequestsBulk('approved')">Approve Selected</button>
-          <button class="btn btn-sm btn-danger" onclick="decideBackfillRequestsBulk('rejected')">Reject Selected</button>
-        </div>
-      ` : ''}
-      <div class="table-wrap"><table>
-        <thead><tr><th></th><th>Code</th><th>Name</th><th>Date</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          ${(requests||[]).map(r=>{
-            const [y,m] = r.date.split('-').map(Number);
-            const finalized = finalizedSet.has(`${y}-${m}`);
-            return `
-            <tr>
-              <td>${r.backfill_status==='pending' && can('admin','accountant') ? `<input type="checkbox" class="backfill-req-check" value="${r.id}">` : ''}</td>
-              <td>${r.employees.emp_code}</td>
-              <td>${r.employees.full_name}</td>
-              <td>${r.date} ${finalized ? '<span class="badge badge-terminated" title="This month is already finalized">Payroll finalized</span>' : ''}</td>
-              <td>${r.backfill_reason || '—'}</td>
-              <td><span class="badge badge-${r.backfill_status==='approved'?'active':r.backfill_status==='rejected'?'terminated':'inactive'}">${r.backfill_status}</span></td>
-              <td>${r.backfill_status==='pending' && can('admin','accountant') ? `
-                <button class="btn btn-sm" onclick="decideBackfillRequest('${r.id}','approved')">Approve</button>
-                <button class="btn btn-sm btn-danger" onclick="decideBackfillRequest('${r.id}','rejected')">Reject</button>
-              ` : ''}</td>
-            </tr>`;}).join('') || '<tr><td colspan="7" class="muted">No backfill requests yet.</td></tr>'}
-        </tbody>
-      </table></div>
-    </div>
-  `;
-  window._BACKFILL_REQUESTS_CACHE = requests || [];
-}
-
-function toggleAllBackfillReqChecks(checked){
-  document.querySelectorAll('.backfill-req-check').forEach(cb=>cb.checked=checked);
-}
-
-// Returns a confirmation message, or null if the request is safe to skip the extra warning
-function finalizedMonthWarning(dateStr, status){
-  if(status !== 'approved') return null;
-  const [y,m] = dateStr.split('-').map(Number);
-  if(!(window._FINALIZED_MONTHS && window._FINALIZED_MONTHS.has(`${y}-${m}`))) return null;
-  return `Heads up: ${MONTH_NAMES[m]} ${y}'s payroll is already finalized, so that payslip itself won't change. Approving will queue an arrear (one day's pay at that month's rate) to be added to this employee's next payroll run automatically.\n\nApprove anyway?`;
-}
-
-// Looks up the employee's finalized payslip for a given month/year to derive a fair per-day rate.
-// Uses the payslips.gross COLUMN directly (always present) rather than the
-// breakdown jsonb blob — payslips created by an older version of this app
-// may not have every field inside breakdown, and silently skipping arrear
-// creation because of that is exactly the kind of gap that leaves a real
-// day's pay stuck with no record anywhere. daysInMonth() is used for the
-// day count instead of a stored totalDays for the same reason.
-async function createArrearForBackfill(employeeId, dateStr){
-  const [y, m] = dateStr.split('-').map(Number);
-  const { data: run } = await sb.from('payroll_runs').select('id').eq('month', m).eq('year', y).eq('status','finalized').maybeSingle();
-  if(!run) return null;
-  const { data: slip } = await sb.from('payslips').select('gross').eq('payroll_run_id', run.id).eq('employee_id', employeeId).maybeSingle();
-  if(!slip || !slip.gross) return null;
-
-  // Don't create a duplicate if one already exists for this exact employee+date
-  // (e.g. a decision got retried, or this is being run via the reconciliation scan)
-  const { data: existing } = await sb.from('arrears').select('id').eq('employee_id', employeeId).eq('source_date', dateStr).maybeSingle();
-  if(existing) return null;
-
-  const { data: dayRow } = await sb.from('daily_attendance').select('morning_marked_at,afternoon_marked_at').eq('employee_id', employeeId).eq('date', dateStr).maybeSingle();
-  const dayValue = (dayRow && dayRow.morning_marked_at && !dayRow.afternoon_marked_at) ? 0.5 : 1; // half day = only one session backfilled
-
-  const perDiem = round2(Number(slip.gross) / daysInMonth(m, y));
-  const amount = round2(perDiem * dayValue);
-  if(!amount) return null;
-
-  const { error } = await sb.from('arrears').insert({
-    employee_id: employeeId,
-    amount,
-    reason: `Backfilled ${dayValue === 0.5 ? 'half-day' : 'full-day'} attendance for ${dateStr} (${MONTH_NAMES[m]} ${y} payroll was already finalized)`,
-    source_month: m,
-    source_year: y,
-    source_date: dateStr,
-    status: 'pending',
-    created_by: CURRENT_PROFILE.id
-  });
-  if(error){ console.error('Arrear creation failed:', error.message); return null; }
-  return amount;
-}
-
-// Reconciliation: find every APPROVED backfill whose date falls in an
-// already-finalized month but which has no arrear on file at all — covers
-// gaps left before this fix (e.g. approvals that happened while the run was
-// still draft, or where an older payslip's breakdown was missing a field
-// createArrearForBackfill used to depend on) — and creates the missing
-// arrear for each. Safe to run repeatedly: createArrearForBackfill itself
-// skips any employee+date that already has an arrear on file.
-async function scanForMissedArrears(){
-  if(!confirm('Scan every approved backfill in an already-finalized month for a missing arrear, and create any that are missing? This is safe to run more than once.')) return;
-  const { data: approved } = await sb.from('daily_attendance')
-    .select('employee_id, date, employees(emp_code, full_name)')
-    .eq('is_backfill', true).eq('backfill_status', 'approved');
-  const { data: finalizedRuns } = await sb.from('payroll_runs').select('month,year').eq('status','finalized');
-  const finalizedSet = new Set((finalizedRuns||[]).map(r => `${r.year}-${r.month}`));
-
-  let created = 0, checked = 0;
-  for(const row of (approved||[])){
-    const [y,m] = row.date.split('-').map(Number);
-    if(!finalizedSet.has(`${y}-${m}`)) continue;
-    checked++;
-    const amount = await createArrearForBackfill(row.employee_id, row.date);
-    if(amount) created++;
-  }
-  toast(`Checked ${checked} approved backfill(s) in finalized months — ${created} missing arrear(s) created.`, false);
-  loadPendingArrearsList();
-  renderBackfillRequests();
-}
-
-// If a request that had already been approved (and possibly turned into an
-// arrear via createArrearForBackfill) gets flipped to rejected, the arrear
-// must not silently keep paying out. A 'pending' arrear is safe to cancel
-// outright — nothing has been paid yet. An 'applied' one means real money
-// already went out on a payslip; that needs a human decision, so this flags
-// it instead of touching it.
-async function cancelOrphanArrear(employeeId, dateStr){
-  const { data: existing } = await sb.from('arrears').select('id,status,amount').eq('employee_id', employeeId).eq('source_date', dateStr).maybeSingle();
-  if(!existing || existing.status === 'cancelled') return '';
-  if(existing.status === 'pending'){
-    await sb.from('arrears').update({ status: 'cancelled' }).eq('id', existing.id);
-    return ' A pending arrear queued for that date was cancelled.';
-  }
-  return ` WARNING: an arrear of ₹${Number(existing.amount).toLocaleString('en-IN')} for that date was already applied to a payslip — rejecting this request did NOT reverse it. Use "Reconcile Arrears" to cancel or adjust it by hand.`;
-}
-
-async function decideBackfillRequest(id, status){
-  const req = (window._BACKFILL_REQUESTS_CACHE||[]).find(r=>r.id===id);
-  const warning = req ? finalizedMonthWarning(req.date, status) : null;
-  const confirmMsg = warning || `${status === 'approved' ? 'Approve' : 'Reject'} this backfill request?`;
-  if(!confirm(confirmMsg)) return;
-
-  const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).eq('id', id);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-
-  let arrearAmount = null;
-  let reversalMsg = '';
-  if(status === 'approved' && req){
-    arrearAmount = await createArrearForBackfill(req.employee_id || req.employees?.id, req.date);
-  }
-  if(status === 'rejected' && req){
-    reversalMsg = await cancelOrphanArrear(req.employee_id || req.employees?.id, req.date);
-  }
-
-  if(req && req.employees && req.employees.user_id){
-    notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.` + (arrearAmount ? ` An arrear of ₹${arrearAmount.toLocaleString('en-IN')} will be added to your next payslip.` : ''), 'attendance');
-  }
-
-  toast('Backfill request ' + status + (arrearAmount ? ` — ₹${arrearAmount.toLocaleString('en-IN')} arrear queued for next payroll run` : '') + reversalMsg, !!reversalMsg && reversalMsg.startsWith(' WARNING'));
-  renderBackfillRequests();
-}
-
-async function decideBackfillRequestsBulk(status){
-  const ids = [...document.querySelectorAll('.backfill-req-check:checked')].map(cb=>cb.value);
-  if(!ids.length){ toast('Select at least one request.', true); return; }
-
-  const cache = window._BACKFILL_REQUESTS_CACHE || [];
-  const anyFinalized = status === 'approved' && ids.some(id => {
-    const r = cache.find(x=>x.id===id);
-    return r && finalizedMonthWarning(r.date, status);
-  });
-  const baseMsg = `${status==='approved'?'Approve':'Reject'} ${ids.length} selected request${ids.length>1?'s':''}?`;
-  const confirmMsg = anyFinalized
-    ? baseMsg + `\n\nHeads up: one or more of these dates fall in an already-finalized payroll month. Approving will automatically queue an arrear (per-day pay) to be included in that employee's next payroll run.`
-    : baseMsg;
-  if(!confirm(confirmMsg)) return;
-
-  const { error } = await sb.from('daily_attendance').update({ backfill_status: status }).in('id', ids);
-  if(error){ toast('Failed: ' + error.message, true); return; }
-
-  let arrearsCreated = 0;
-  let reversalWarnings = 0;
-  for(const id of ids){
-    const req = cache.find(r=>r.id===id);
-    if(!req) continue;
-    let arrearAmount = null;
-    let reversalMsg = '';
-    if(status === 'approved'){
-      arrearAmount = await createArrearForBackfill(req.employee_id || req.employees?.id, req.date);
-      if(arrearAmount) arrearsCreated++;
-    }
-    if(status === 'rejected'){
-      reversalMsg = await cancelOrphanArrear(req.employee_id || req.employees?.id, req.date);
-      if(reversalMsg.startsWith(' WARNING')) reversalWarnings++;
-    }
-    if(req.employees && req.employees.user_id){
-      notifyUser(req.employees.user_id, `Your attendance backfill request for ${req.date} was ${status}.` + (arrearAmount ? ` An arrear of ₹${arrearAmount.toLocaleString('en-IN')} will be added to your next payslip.` : ''), 'attendance');
-    }
-  }
-
-  toast(`${ids.length} backfill request${ids.length>1?'s':''} ${status}` + (arrearsCreated ? ` — ${arrearsCreated} arrear(s) queued` : '') + (reversalWarnings ? ` — ${reversalWarnings} already-applied arrear(s) need manual reconciliation` : ''), reversalWarnings > 0);
-  renderBackfillRequests();
-}
-
-async function editLeaveBalance(employeeId, leaveType, currentAllocated){
-  const year = currentFYStartYear();
-  const val = prompt(`New allocation for ${leaveTypeLabel(leaveType)} (${fyLabel(year)}):`, currentAllocated);
-  if(val === null) return;
-  const allocated = parseFloat(val);
-  if(isNaN(allocated)){ toast('Enter a valid number.', true); return; }
-  const { error } = await sb.from('leave_balances').upsert({ employee_id: employeeId, leave_type: leaveType, year, allocated }, { onConflict: 'employee_id,leave_type,year' });
-  if(error){ toast('Failed: ' + error.message, true); return; }
-  toast('Balance updated');
-  renderLeaveRequests();
-}
-
-function exportLeaveRegister(){
-  const requests = window._LEAVE_REQUESTS_CACHE || [];
-  if(!requests.length){ toast('Nothing to export.', true); return; }
-  const headers = ['emp_code','full_name','leave_type','from_date','to_date','days','status','reason'];
-  const rows = requests.map(r=>[r.employees.emp_code, r.employees.full_name, leaveTypeLabel(r.leave_type), r.from_date, r.to_date, r.days, r.status, r.reason||'']);
-  downloadCSV('leave_register.csv', headers, rows);
-}
-
-/* ============================================================================
-   NOTIFICATIONS
-   ============================================================================ */
-async function loadNotifications(){
-  const { data: { user } } = await sb.auth.getUser();
-  if(!user) return;
-  const { data } = await sb.from('notifications').select('*').eq('user_id', user.id).order('created_at',{ascending:false}).limit(30);
-  window._NOTIFICATIONS = data || [];
-  const unread = (data||[]).filter(n=>!n.is_read).length;
-  const countEl = document.getElementById('notif-count');
-  if(countEl){
-    countEl.textContent = unread;
-    countEl.style.display = unread > 0 ? 'inline-block' : 'none';
-  }
-  renderNotifPanel();
-}
-
-function renderNotifPanel(){
-  const panel = document.getElementById('notif-panel');
-  if(!panel) return;
-  const notifs = window._NOTIFICATIONS || [];
-  panel.innerHTML = notifs.length ? notifs.map(n=>`
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);${n.is_read?'':'background:#eef5ff;'}cursor:pointer;" onclick="markNotifRead('${n.id}')">
-      <div style="font-size:13px;">${n.message}</div>
-      <div class="muted" style="font-size:11px;margin-top:2px;">${new Date(n.created_at).toLocaleString('en-IN')}</div>
-    </div>
-  `).join('') : '<div class="muted" style="padding:14px;">No notifications yet.</div>';
-}
-
-function toggleNotifPanel(){
-  const panel = document.getElementById('notif-panel');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-}
-
-async function markNotifRead(id){
-  await sb.from('notifications').update({ is_read: true }).eq('id', id);
-  loadNotifications();
-}
-
-// Helper used elsewhere (leave decisions, payroll finalization) to push a notification to a specific user
-async function notifyUser(userId, message, type='info'){
-  if(!userId) return;
-  await sb.from('notifications').insert({ user_id: userId, message, type });
-}
-
-document.addEventListener('click', (e)=>{
-  const panel = document.getElementById('notif-panel');
-  if(!panel || panel.style.display === 'none') return;
-  if(!e.target.closest('#notif-panel') && !e.target.closest('button[onclick="toggleNotifPanel()"]')){
-    panel.style.display = 'none';
-  }
 });
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+(async function boot(){
+  const { data: { session } } = await supabase.auth.getSession();
+  if(session){ await routeAfterAuth(); } else { showScreen('screen-auth'); }
+})();
 </script>
 </body>
 </html>
