@@ -214,14 +214,8 @@
       <div class="hidden" id="onboard-admin" style="margin-top:22px;">
         <label for="ob-school-name">School name</label>
         <input type="text" id="ob-school-name" placeholder="e.g. Friends Vidyanikethan School">
-        <label for="ob-state">State</label>
-        <select id="ob-state">
-          <option value="AP" selected>Andhra Pradesh</option>
-          <option value="TS">Telangana</option>
-          <option value="KA">Karnataka</option>
-          <option value="TN">Tamil Nadu</option>
-          <option value="OTHER">Other</option>
-        </select>
+        <label for="ob-slug">School URL</label>
+        <input type="text" id="ob-slug" placeholder="e.g. friends-vidyanikethan">
         <label for="ob-prefix">Employee code prefix</label>
         <input type="text" id="ob-prefix" placeholder="e.g. FVN" maxlength="6" style="text-transform:uppercase;">
         <button class="btn btn-primary" id="btn-create-school">Create school</button>
@@ -381,7 +375,7 @@ async function routeAfterAuth(){
     return;
   }
 
-  if(!profile.school_id || profile.role === 'pending'){
+  if(!profile.school_id){
     showScreen('screen-onboarding');
   } else {
     renderDashboard(profile, user);
@@ -392,6 +386,13 @@ async function routeAfterAuth(){
 // ---------------------------------------------------------------------------
 // Onboarding: choice buttons
 // ---------------------------------------------------------------------------
+$('ob-school-name').addEventListener('input', ()=>{
+  if($('ob-slug').dataset.touched) return;
+  $('ob-slug').value = $('ob-school-name').value.trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+});
+$('ob-slug').addEventListener('input', ()=>{ $('ob-slug').dataset.touched = '1'; });
+
 $('choice-admin').addEventListener('click', ()=>{
   $('choice-admin').classList.add('selected');
   $('choice-employee').classList.remove('selected');
@@ -405,15 +406,16 @@ $('choice-employee').addEventListener('click', ()=>{
 
 $('btn-create-school').addEventListener('click', async ()=>{
   const name = $('ob-school-name').value.trim();
-  const state = $('ob-state').value;
+  const slug = $('ob-slug').value.trim().toLowerCase();
   const prefix = $('ob-prefix').value.trim().toUpperCase() || 'EMP';
   if(!name){ setMsg($('onboard-msg'), 'School name is required.', 'error'); return; }
+  if(!slug){ setMsg($('onboard-msg'), 'School URL is required.', 'error'); return; }
 
   const btn = $('btn-create-school');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Creating...';
   try{
-    const { data, error } = await supabase.rpc('create_school_and_become_admin', {
-      p_school_name: name, p_state: state, p_emp_code_prefix: prefix
+    const { data, error } = await supabase.rpc('create_school_and_admin', {
+      p_school_name: name, p_slug: slug, p_emp_code_prefix: prefix
     });
     if(error) throw error;
     if(data && data.success === false) throw new Error(data.message);
@@ -439,13 +441,13 @@ $('ob-school-search').addEventListener('input', ()=>{
       return;
     }
     box.innerHTML = data.map(s =>
-      `<div class="school-result" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;')}">${s.name}</div>`
+      `<div class="school-result" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;')}" data-slug="${s.slug}">${s.name}</div>`
     ).join('');
     box.querySelectorAll('.school-result').forEach(el=>{
       el.addEventListener('click', ()=>{
         box.querySelectorAll('.school-result').forEach(x=>x.classList.remove('selected'));
         el.classList.add('selected');
-        selectedSchool = { id: el.dataset.id, name: el.dataset.name };
+        selectedSchool = { id: el.dataset.id, name: el.dataset.name, slug: el.dataset.slug };
         show('emp-code-wrap');
       });
     });
@@ -461,7 +463,7 @@ $('btn-link-employee').addEventListener('click', async ()=>{
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Joining...';
   try{
     const { data, error } = await supabase.rpc('link_employee_account', {
-      p_emp_code: code, p_school_id: selectedSchool.id
+      p_school_slug: selectedSchool.slug, p_emp_code: code
     });
     if(error) throw error;
     if(data && data.success === false) throw new Error(data.message);
