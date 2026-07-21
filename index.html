@@ -525,6 +525,7 @@ $('btn-signout').addEventListener('click', async ()=>{
   const { data: { session } } = await supabase.auth.getSession();
   if(session){ await routeAfterAuth(); } else { showScreen('screen-auth'); }
 })();
+})();
 </script>
 </body>
 </html>
