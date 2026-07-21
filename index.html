@@ -456,6 +456,7 @@
 </div>
 
 <script>
+(function(){
 // ============================================================================
 // CONFIG — fill these in from Supabase → Project Settings → API
 // ============================================================================
@@ -953,6 +954,7 @@ $('btn-signout').addEventListener('click', async ()=>{
 (async function boot(){
   const { data: { session } } = await supabase.auth.getSession();
   if(session){ await routeAfterAuth(); } else { showScreen('screen-auth'); }
+})();
 })();
 </script>
 </body>
